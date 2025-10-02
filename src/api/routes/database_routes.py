@@ -21,6 +21,37 @@ def register_database_routes(app, database_manager):
             app.logger.error(f"Error obteniendo PLCs: {e}")
             return jsonify({"error": str(e), "success": False}), 500
 
+    @app.route('/api/v1/plcs', methods=['POST'])
+    def add_plc():
+        """Agrega un nuevo PLC"""
+        try:
+            data = request.get_json()
+            
+            # Validar datos requeridos
+            required_fields = ['plc_id', 'name', 'ip_address', 'port', 'type']
+            for field in required_fields:
+                if field not in data:
+                    return jsonify({"error": f"Campo requerido '{field}' faltante", "success": False}), 400
+            
+            # Agregar PLC a la base de datos
+            success = database_manager.add_plc(
+                plc_id=data['plc_id'],
+                name=data['name'],
+                ip_address=data['ip_address'],
+                port=int(data['port']),
+                plc_type=data['type'],
+                description=data.get('description', '')
+            )
+            
+            if success:
+                return jsonify({"message": "PLC agregado exitosamente", "success": True}), 201
+            else:
+                return jsonify({"error": "Error agregando PLC", "success": False}), 500
+                
+        except Exception as e:
+            app.logger.error(f"Error agregando PLC: {e}")
+            return jsonify({"error": str(e), "success": False}), 500
+
     @app.route('/api/v1/plcs/<plc_id>', methods=['GET'])
     def get_plc(plc_id: str):
         """Obtiene un PLC específico"""
