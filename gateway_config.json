@@ -32,17 +32,9 @@
       "id": "PLC-001",
       "type": "delta",
       "name": "Carrusel Principal",
-      "ip": "192.168.1.100",
+      "ip": "192.168.1.50",
       "port": 3200,
       "description": "PLC Delta AS Series principal"
-    },
-    {
-      "id": "PLC-002",
-      "type": "delta",
-      "name": "Carrusel Secundario",
-      "ip": "192.168.1.101",
-      "port": 3200,
-      "description": "PLC Delta AS Series secundario"
     }
   ]
 }
