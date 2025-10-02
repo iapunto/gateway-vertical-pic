@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Paquete API para el Gateway Local
+API REST para el Gateway Local
 """
 
-# Versión del paquete
-__version__ = "1.0.0"
+from .gateway_api import GatewayAPI, create_app, main
+from .routes import register_status_routes, register_health_routes, register_database_routes, register_ui_routes
+from .middleware import AuthMiddleware, RateLimitMiddleware, SecurityMiddleware
 
-# Importaciones públicas
-from .gateway_api import GatewayAPI, create_app
-
-__all__ = ["GatewayAPI", "create_app"]
+__all__ = [
+    'GatewayAPI',
+    'create_app',
+    'main',
+    'register_status_routes',
+    'register_health_routes',
+    'register_database_routes',
+    'register_ui_routes',
+    'AuthMiddleware',
+    'RateLimitMiddleware',
+    'SecurityMiddleware'
+]

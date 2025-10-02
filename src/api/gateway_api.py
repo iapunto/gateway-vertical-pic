@@ -4,17 +4,23 @@
 API REST para el Gateway Local
 """
 
-from monitoring import get_metrics_collector
-from health.health_checker import HealthChecker
-from adapters.api_adapter import APIAdapter
-from core.gateway_core import GatewayCore
+from src.monitoring import get_metrics_collector
+from src.health.health_checker import HealthChecker
+from src.adapters.api_adapter import APIAdapter
+from src.core.gateway_core import GatewayCore
+from src.database import get_database_manager
 import sys
 import os
-import json
 import logging
-from typing import Dict, Any, Optional
-from flask import Flask, request, jsonify
+from typing import Optional
+from flask import Flask
 from flask.logging import default_handler
+
+# Importar las nuevas rutas modulares
+from src.api.routes.status_routes import register_status_routes
+from src.api.routes.health_routes import register_health_routes
+from src.api.routes.database_routes import register_database_routes
+from src.api.routes.ui_routes import register_ui_routes
 
 # Añadir el directorio src al path para importaciones
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -29,6 +35,7 @@ class GatewayAPI:
         self.adapter = APIAdapter(self.gateway)
         self.health_checker = HealthChecker(self.gateway)
         self.metrics_collector = get_metrics_collector()
+        self.database_manager = get_database_manager()
         self._setup_logging()
         self._setup_routes()
 
@@ -47,140 +54,12 @@ class GatewayAPI:
 
     def _setup_routes(self) -> None:
         """Configura las rutas de la API"""
-        self.app.add_url_rule('/api/v1/status', 'get_status',
-                              self.get_status, methods=['GET'])
-        self.app.add_url_rule('/api/v1/status/<machine_id>',
-                              'get_machine_status', self.get_machine_status, methods=['GET'])
-        self.app.add_url_rule('/api/v1/machines', 'get_machines',
-                              self.get_machines, methods=['GET'])
-        self.app.add_url_rule('/api/v1/command', 'send_command',
-                              self.send_command, methods=['POST'])
-        self.app.add_url_rule('/api/v1/move/<int:position>',
-                              'move_to_position', self.move_to_position, methods=['POST'])
-        self.app.add_url_rule('/api/v1/start', 'start_gateway',
-                              self.start_gateway, methods=['POST'])
-        self.app.add_url_rule('/api/v1/stop', 'stop_gateway',
-                              self.stop_gateway, methods=['POST'])
-
-        # Rutas de salud y métricas
-        self.app.add_url_rule('/health', 'health_check',
-                              self.health_check, methods=['GET'])
-        self.app.add_url_rule('/metrics', 'metrics',
-                              self.metrics, methods=['GET'])
-
-    def get_status(self):
-        """Obtiene el estado de todos los PLCs"""
-        try:
-            status = self.adapter.get_status()
-            return jsonify(status)
-        except Exception as e:
-            self.app.logger.error(f"Error obteniendo status: {e}")
-            return jsonify({"error": str(e), "success": False}), 500
-
-    def get_machine_status(self, machine_id: str):
-        """Obtiene el estado de un PLC específico"""
-        try:
-            status = self.adapter.get_status(machine_id)
-            return jsonify(status)
-        except Exception as e:
-            self.app.logger.error(
-                f"Error obteniendo status de máquina {machine_id}: {e}")
-            return jsonify({"error": str(e), "success": False}), 500
-
-    def get_machines(self):
-        """Obtiene la lista de máquinas disponibles"""
-        try:
-            machines = self.adapter.get_machines()
-            return jsonify(machines)
-        except Exception as e:
-            self.app.logger.error(f"Error obteniendo lista de máquinas: {e}")
-            return jsonify({"error": str(e), "success": False}), 500
-
-    def send_command(self):
-        """Envía un comando a un PLC"""
-        try:
-            data = request.get_json()
-            if not data:
-                return jsonify({"error": "No se proporcionaron datos", "success": False}), 400
-
-            command = data.get('command')
-            argument = data.get('argument')
-            machine_id = data.get('machine_id')
-
-            if command is None:
-                return jsonify({"error": "Falta el parámetro 'command'", "success": False}), 400
-
-            result = self.adapter.send_command(command, argument, machine_id)
-            return jsonify(result)
-        except Exception as e:
-            self.app.logger.error(f"Error enviando comando: {e}")
-            return jsonify({"error": str(e), "success": False}), 500
-
-    def move_to_position(self, position: int):
-        """Mueve un carrusel a una posición específica"""
-        try:
-            data = request.get_json()
-            machine_id = data.get('machine_id') if data else None
-
-            result = self.adapter.move_to_position(position, machine_id)
-            return jsonify(result)
-        except Exception as e:
-            self.app.logger.error(f"Error moviendo a posición {position}: {e}")
-            return jsonify({"error": str(e), "success": False}), 500
-
-    def start_gateway(self):
-        """Inicia el gateway"""
-        try:
-            if self.gateway.running:
-                return jsonify({"message": "Gateway ya está iniciado", "success": True})
-
-            if self.gateway.start():
-                return jsonify({"message": "Gateway iniciado exitosamente", "success": True})
-            else:
-                return jsonify({"error": "Error iniciando Gateway", "success": False}), 500
-        except Exception as e:
-            self.app.logger.error(f"Error iniciando gateway: {e}")
-            return jsonify({"error": str(e), "success": False}), 500
-
-    def stop_gateway(self):
-        """Detiene el gateway"""
-        try:
-            if not self.gateway.running:
-                return jsonify({"message": "Gateway ya está detenido", "success": True})
-
-            self.gateway.stop()
-            return jsonify({"message": "Gateway detenido exitosamente", "success": True})
-        except Exception as e:
-            self.app.logger.error(f"Error deteniendo gateway: {e}")
-            return jsonify({"error": str(e), "success": False}), 500
-
-    def health_check(self):
-        """Endpoint de verificación de salud"""
-        try:
-            health_status = self.health_checker.get_health_status()
-            status_code = 200
-            if health_status['status'] == 'unhealthy':
-                status_code = 503
-            elif health_status['status'] == 'degraded':
-                status_code = 200  # Aún funcional pero con problemas
-
-            return jsonify(health_status), status_code
-        except Exception as e:
-            self.app.logger.error(f"Error en health check: {e}")
-            return jsonify({
-                "status": "error",
-                "message": str(e),
-                "timestamp": self.health_checker.get_health_status()['timestamp']
-            }), 500
-
-    def metrics(self):
-        """Endpoint de métricas para Prometheus"""
-        try:
-            metrics_text = self.metrics_collector.get_metrics_text()
-            return metrics_text, 200, {'Content-Type': 'text/plain; version=0.0.4; charset=utf-8'}
-        except Exception as e:
-            self.app.logger.error(f"Error obteniendo métricas: {e}")
-            return "Error obteniendo métricas", 500, {'Content-Type': 'text/plain'}
+        # Registrar las rutas modulares
+        register_status_routes(self.app, self.adapter)
+        register_health_routes(
+            self.app, self.health_checker, self.metrics_collector)
+        register_database_routes(self.app, self.database_manager)
+        register_ui_routes(self.app)
 
     def run(self, host: Optional[str] = None, port: Optional[int] = None, debug: bool = False) -> None:
         """Inicia el servidor Flask"""
