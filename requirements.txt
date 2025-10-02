@@ -1,0 +1,12 @@
+# Dependencias del Gateway Local
+flask==2.0.1
+requests==2.25.1
+websockets==9.1
+pymodbus==3.0.0
+pycomm3==1.2.2
+python-snap7==1.2
+psutil==5.8.0
+prometheus-client==0.11.0
+cryptography==3.4.7
+pyjwt==2.1.0
+bcrypt==3.2.0
