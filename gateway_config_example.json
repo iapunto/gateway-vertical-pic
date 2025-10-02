@@ -1,0 +1,40 @@
+{
+  "gateway": {
+    "id": "GW-001",
+    "name": "Gateway Local Principal",
+    "version": "2.7.0"
+  },
+  "wms": {
+    "endpoint": "https://wms.example.com/api/v1/gateways",
+    "auth_token": "TOKEN_DE_AUTENTICACION_DEL_WMS",
+    "reconnect_interval": 30,
+    "heartbeat_interval": 60
+  },
+  "network": {
+    "bind_address": "0.0.0.0",
+    "bind_port": 8080,
+    "plc_port": 3200
+  },
+  "security": {
+    "tls_cert": "",
+    "tls_key": "",
+    "ca_cert": "",
+    "require_tls": false
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "logs/gateway.log",
+    "max_size": 10485760,
+    "backup_count": 5
+  },
+  "plcs": [
+    {
+      "id": "PLC-001",
+      "type": "delta",
+      "name": "Carrusel Principal",
+      "ip": "192.168.1.50",
+      "port": 3200,
+      "description": "PLC Delta AS Series principal"
+    }
+  ]
+}
