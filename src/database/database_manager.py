@@ -15,13 +15,12 @@ import threading
 # Instancia global del gestor de base de datos
 _database_manager_instance = None
 
-
 def get_database_manager(db_path: str = "gateway.db") -> 'DatabaseManager':
     """Obtiene la instancia singleton del gestor de base de datos
-
+    
     Args:
         db_path: Ruta al archivo de base de datos SQLite
-
+        
     Returns:
         Instancia del DatabaseManager
     """
@@ -217,12 +216,10 @@ class DatabaseManager:
                 conn.close()
 
                 if rows_affected > 0:
-                    self.logger.info(
-                        f"PLC {plc_id} actualizado en la base de datos")
+                    self.logger.info(f"PLC {plc_id} actualizado en la base de datos")
                     return True
                 else:
-                    self.logger.warning(
-                        f"No se encontró el PLC {plc_id} para actualizar")
+                    self.logger.warning(f"No se encontró el PLC {plc_id} para actualizar")
                     return False
 
         except Exception as e:
@@ -623,3 +620,91 @@ class DatabaseManager:
                 "configurations_count": 0,
                 "metrics_count": 0
             }
+
+    def set_configuration(self, key: str, value: str, description: Optional[str] = None) -> bool:
+        """Establece un valor de configuración
+
+        Args:
+            key: Clave de la configuración
+            value: Valor de la configuración
+            description: Descripción de la configuración (opcional)
+
+        Returns:
+            True si se guardó correctamente, False en caso contrario
+        """
+        try:
+            with self._lock:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+
+                cursor.execute('''
+                    INSERT OR REPLACE INTO configurations 
+                    (key, value, description, updated_at)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (key, value, description))
+
+                conn.commit()
+                conn.close()
+
+                self.logger.info(f"Configuración {key} guardada en la base de datos")
+                return True
+
+        except Exception as e:
+            self.logger.error(f"Error guardando configuración {key}: {e}")
+            return False
+
+    def get_configuration(self, key: str) -> Optional[str]:
+        """Obtiene un valor de configuración
+
+        Args:
+            key: Clave de la configuración
+
+        Returns:
+            Valor de la configuración o None si no se encuentra
+        """
+        try:
+            with self._lock:
+                conn = sqlite3.connect(self.db_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                cursor.execute('''
+                    SELECT value FROM configurations WHERE key = ?
+                ''', (key,))
+
+                row = cursor.fetchone()
+                conn.close()
+
+                if row:
+                    return row['value']
+                else:
+                    return None
+
+        except Exception as e:
+            self.logger.error(f"Error obteniendo configuración {key}: {e}")
+            return None
+
+    def get_all_configurations(self) -> Dict[str, str]:
+        """Obtiene todas las configuraciones
+
+        Returns:
+            Diccionario con todas las configuraciones
+        """
+        try:
+            with self._lock:
+                conn = sqlite3.connect(self.db_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                cursor.execute('''
+                    SELECT key, value FROM configurations ORDER BY key
+                ''')
+
+                rows = cursor.fetchall()
+                conn.close()
+
+                return {row['key']: row['value'] for row in rows}
+
+        except Exception as e:
+            self.logger.error(f"Error obteniendo todas las configuraciones: {e}")
+            return {}

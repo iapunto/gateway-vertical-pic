@@ -26,13 +26,13 @@ def register_database_routes(app, database_manager):
         """Agrega un nuevo PLC"""
         try:
             data = request.get_json()
-
+            
             # Validar datos requeridos
             required_fields = ['plc_id', 'name', 'ip_address', 'port', 'type']
             for field in required_fields:
                 if field not in data:
                     return jsonify({"error": f"Campo requerido '{field}' faltante", "success": False}), 400
-
+            
             # Agregar PLC a la base de datos
             success = database_manager.add_plc(
                 plc_id=data['plc_id'],
@@ -42,12 +42,12 @@ def register_database_routes(app, database_manager):
                 plc_type=data['type'],
                 description=data.get('description', '')
             )
-
+            
             if success:
                 return jsonify({"message": "PLC agregado exitosamente", "success": True}), 201
             else:
                 return jsonify({"error": "Error agregando PLC", "success": False}), 500
-
+                
         except Exception as e:
             app.logger.error(f"Error agregando PLC: {e}")
             return jsonify({"error": str(e), "success": False}), 500
@@ -70,13 +70,13 @@ def register_database_routes(app, database_manager):
         """Actualiza un PLC existente"""
         try:
             data = request.get_json()
-
+            
             # Validar datos requeridos
             required_fields = ['name', 'ip_address', 'port', 'type']
             for field in required_fields:
                 if field not in data:
                     return jsonify({"error": f"Campo requerido '{field}' faltante", "success": False}), 400
-
+            
             # Actualizar PLC en la base de datos
             success = database_manager.update_plc(
                 plc_id=plc_id,
@@ -86,12 +86,12 @@ def register_database_routes(app, database_manager):
                 plc_type=data['type'],
                 description=data.get('description', '')
             )
-
+            
             if success:
                 return jsonify({"message": "PLC actualizado exitosamente", "success": True})
             else:
                 return jsonify({"error": "Error actualizando PLC", "success": False}), 500
-
+                
         except Exception as e:
             app.logger.error(f"Error actualizando PLC {plc_id}: {e}")
             return jsonify({"error": str(e), "success": False}), 500
@@ -154,4 +154,53 @@ def register_database_routes(app, database_manager):
             return jsonify(stats)
         except Exception as e:
             app.logger.error(f"Error obteniendo estadísticas: {e}")
+            return jsonify({"error": str(e), "success": False}), 500
+
+    @app.route('/api/v1/config', methods=['GET'])
+    def get_config():
+        """Obtiene todas las configuraciones"""
+        try:
+            configs = database_manager.get_all_configurations()
+            return jsonify(configs)
+        except Exception as e:
+            app.logger.error(f"Error obteniendo configuraciones: {e}")
+            return jsonify({"error": str(e), "success": False}), 500
+
+    @app.route('/api/v1/config', methods=['POST'])
+    def set_config():
+        """Establece una configuración"""
+        try:
+            data = request.get_json()
+            
+            # Validar datos requeridos
+            if 'key' not in data or 'value' not in data:
+                return jsonify({"error": "Campos 'key' y 'value' son requeridos", "success": False}), 400
+            
+            # Guardar configuración en la base de datos
+            success = database_manager.set_configuration(
+                key=data['key'],
+                value=data['value'],
+                description=data.get('description', '')
+            )
+            
+            if success:
+                return jsonify({"message": "Configuración guardada exitosamente", "success": True})
+            else:
+                return jsonify({"error": "Error guardando configuración", "success": False}), 500
+                
+        except Exception as e:
+            app.logger.error(f"Error guardando configuración: {e}")
+            return jsonify({"error": str(e), "success": False}), 500
+
+    @app.route('/api/v1/config/<key>', methods=['GET'])
+    def get_config_key(key: str):
+        """Obtiene una configuración específica"""
+        try:
+            value = database_manager.get_configuration(key)
+            if value is not None:
+                return jsonify({"key": key, "value": value})
+            else:
+                return jsonify({"error": "Configuración no encontrada", "success": False}), 404
+        except Exception as e:
+            app.logger.error(f"Error obteniendo configuración {key}: {e}")
             return jsonify({"error": str(e), "success": False}), 500

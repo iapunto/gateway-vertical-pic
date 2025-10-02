@@ -444,16 +444,49 @@ async function loadEventsData() {
 }
 
 // Cargar datos de configuración
-function loadConfigData() {
-  // En una implementación real, esto obtendría la configuración desde la API
-  // Por ahora, usamos valores por defecto
-  document.getElementById("bind-address").value = "0.0.0.0";
-  document.getElementById("bind-port").value = "8080";
-  document.getElementById("plc-port").value = "3200";
-  document.getElementById("scan-interval").value = "30";
-  document.getElementById("log-level").value = "INFO";
-  document.getElementById("wms-endpoint").value =
-    "https://wms.example.com/api/v1/gateways";
+async function loadConfigData() {
+  try {
+    // Obtener configuraciones desde la API
+    const response = await fetch(`${API_BASE_URL}/config`);
+    const configs = await response.json();
+
+    // Establecer valores en el formulario si existen en la base de datos
+    if (configs) {
+      document.getElementById("bind-address").value = 
+        configs["bind_address"] || "0.0.0.0";
+      document.getElementById("bind-port").value = 
+        configs["bind_port"] || "8080";
+      document.getElementById("plc-port").value = 
+        configs["plc_port"] || "3200";
+      document.getElementById("scan-interval").value = 
+        configs["scan_interval"] || "30";
+      document.getElementById("log-level").value = 
+        configs["log_level"] || "INFO";
+      document.getElementById("wms-endpoint").value = 
+        configs["wms_endpoint"] || "https://wms.example.com/api/v1/gateways";
+    } else {
+      // Valores por defecto si no hay configuraciones
+      document.getElementById("bind-address").value = "0.0.0.0";
+      document.getElementById("bind-port").value = "8080";
+      document.getElementById("plc-port").value = "3200";
+      document.getElementById("scan-interval").value = "30";
+      document.getElementById("log-level").value = "INFO";
+      document.getElementById("wms-endpoint").value =
+        "https://wms.example.com/api/v1/gateways";
+    }
+  } catch (error) {
+    console.error("Error cargando configuración:", error);
+    showNotification("Error cargando configuración", "error");
+    
+    // Valores por defecto en caso de error
+    document.getElementById("bind-address").value = "0.0.0.0";
+    document.getElementById("bind-port").value = "8080";
+    document.getElementById("plc-port").value = "3200";
+    document.getElementById("scan-interval").value = "30";
+    document.getElementById("log-level").value = "INFO";
+    document.getElementById("wms-endpoint").value =
+      "https://wms.example.com/api/v1/gateways";
+  }
 }
 
 // Abrir modal de PLC
@@ -670,26 +703,63 @@ async function sendCommand() {
 }
 
 // Guardar configuración
-function saveConfig() {
-  const bindAddress = document.getElementById("bind-address").value;
-  const bindPort = document.getElementById("bind-port").value;
-  const plcPort = document.getElementById("plc-port").value;
-  const scanInterval = document.getElementById("scan-interval").value;
-  const logLevel = document.getElementById("log-level").value;
-  const wmsEndpoint = document.getElementById("wms-endpoint").value;
+async function saveConfig() {
+  try {
+    const bindAddress = document.getElementById("bind-address").value;
+    const bindPort = document.getElementById("bind-port").value;
+    const plcPort = document.getElementById("plc-port").value;
+    const scanInterval = document.getElementById("scan-interval").value;
+    const logLevel = document.getElementById("log-level").value;
+    const wmsEndpoint = document.getElementById("wms-endpoint").value;
 
-  // Validar datos
-  if (!bindAddress || !bindPort || !plcPort || !scanInterval) {
-    showNotification(
-      "Por favor complete todos los campos obligatorios.",
-      "error"
-    );
-    return;
+    // Validar datos
+    if (!bindAddress || !bindPort || !plcPort || !scanInterval) {
+      showNotification(
+        "Por favor complete todos los campos obligatorios.",
+        "error"
+      );
+      return;
+    }
+
+    // Guardar cada configuración individualmente
+    const configs = [
+      { key: "bind_address", value: bindAddress, description: "Dirección IP de escucha" },
+      { key: "bind_port", value: bindPort, description: "Puerto de escucha" },
+      { key: "plc_port", value: plcPort, description: "Puerto PLC" },
+      { key: "scan_interval", value: scanInterval, description: "Intervalo de escaneo" },
+      { key: "log_level", value: logLevel, description: "Nivel de log" },
+      { key: "wms_endpoint", value: wmsEndpoint, description: "Endpoint WMS" }
+    ];
+
+    // Enviar cada configuración a la API
+    let success = true;
+    for (const config of configs) {
+      const response = await fetch(`${API_BASE_URL}/config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(config),
+      });
+
+      if (!response.ok) {
+        success = false;
+        const errorData = await response.json();
+        showNotification(
+          `Error guardando configuración ${config.key}: ${errorData.error || "Error desconocido"}`,
+          "error"
+        );
+        break;
+      }
+    }
+
+    if (success) {
+      showNotification("Configuración guardada exitosamente.", "success");
+    }
+  } catch (error) {
+    console.error("Error guardando configuración:", error);
+    showNotification("Error guardando configuración", "error");
   }
-
-  // En una implementación real, esto enviaría la configuración a la API
-  // Por ahora, solo mostramos una notificación
-  showNotification("Configuración guardada exitosamente.", "success");
 }
 
 // Configurar eventos
