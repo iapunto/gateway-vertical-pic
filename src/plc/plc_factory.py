@@ -5,8 +5,10 @@ Fábrica para crear instancias de PLCs según el tipo
 """
 
 from typing import Dict, Any
-from gateway.src.interfaces.plc_interface import PLCInterface
-from gateway.src.plc.delta_plc import DeltaPLC
+
+# Corregir las importaciones
+from interfaces.plc_interface import PLCInterface
+from plc.delta_plc import DeltaPLC
 
 
 class PLCFactory:

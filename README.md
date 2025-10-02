@@ -8,7 +8,7 @@ Implementación modular del Gateway Local para comunicación con PLCs de racks v
 
 La nueva arquitectura sigue principios de diseño limpio y separación de responsabilidades:
 
-```
+```text
 gateway/
 ├── src/                    # Código fuente del Gateway
 │   ├── core/              # Core del sistema y orquestación

@@ -5,7 +5,9 @@ Adaptador para mantener compatibilidad con la API existente
 """
 
 from typing import Dict, Any, Optional
-from gateway.src.core.gateway_core import GatewayCore
+
+# Corregir la importación
+from core.gateway_core import GatewayCore
 
 
 class APIAdapter:

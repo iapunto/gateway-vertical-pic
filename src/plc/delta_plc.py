@@ -10,7 +10,9 @@ import time
 import logging
 import random
 from typing import Dict, Any, Optional
-from gateway.src.interfaces.plc_interface import PLCInterface
+
+# Corregir la importación
+from interfaces.plc_interface import PLCInterface
 
 
 class DeltaPLC(PLCInterface):

@@ -8,10 +8,12 @@ import logging
 import threading
 import time
 from typing import Dict, Any, List, Optional
-from gateway.src.config.config_manager import ConfigManager
-from gateway.src.utils.logger import setup_logger
-from gateway.src.plc.plc_factory import PLCFactory
-from gateway.src.interfaces.plc_interface import PLCInterface
+
+# Corregir las importaciones
+from config.config_manager import ConfigManager
+from utils.logger import setup_logger
+from plc.plc_factory import PLCFactory
+from interfaces.plc_interface import PLCInterface
 
 
 class GatewayCore:
