@@ -137,4 +137,4 @@ dmypy.json
 Thumbs.db
 
 # Project specific
-venv/
+venv/gateway.db

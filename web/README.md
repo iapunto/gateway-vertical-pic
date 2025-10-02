@@ -5,88 +5,113 @@ Esta carpeta contiene la interfaz de usuario web para el Gateway Local que conec
 ## Estructura de Archivos
 
 - `index.html` - Página principal de la interfaz web
-- `styles.css` - Hoja de estilos CSS
-- `script.js` - Funcionalidad JavaScript
-- `assets/` - Carpeta para imágenes y otros recursos (se creará cuando se necesite)
+- `styles.css` - Hojas de estilo CSS
+- `script.js` - Lógica JavaScript para la interfaz
+- `components/` - Componentes reutilizables (archivos .vue antiguos, ya no utilizados)
 
 ## Características
 
 ### Dashboard
 
-- Vista general del estado del sistema
-- Estadísticas de PLCs conectados
-- Gráficos de monitoreo en tiempo real
+- Visualización en tiempo real del estado del sistema
+- Contadores de PLCs conectados, comandos ejecutados y eventos registrados
+- Gráficos de estado de PLCs y tiempo de respuesta
 - Últimos eventos del sistema
 
 ### Gestión de PLCs
 
-- Lista de PLCs descubiertos en la red
-- Estado en tiempo real de cada PLC
-- Escaneo automático de red para encontrar nuevos PLCs
-- Envío de comandos a PLCs específicos
+- Listado completo de PLCs registrados
+- Creación, edición y eliminación de PLCs
+- Visualización del estado en línea/fuera de línea
+- Información detallada de cada PLC
 
 ### Comandos
 
-- Historial de comandos enviados
-- Estado de ejecución de comandos
+- Envío de comandos a los PLCs (START, STOP, MOVE, STATUS, RESET)
+- Historial de comandos ejecutados
+- Visualización del estado de éxito/error de cada comando
 - Respuestas de los PLCs
 
 ### Eventos
 
 - Registro de eventos del sistema
-- Filtrado por tipo de evento
-- Nivel de severidad de eventos
-
-### Monitoreo
-
-- Gráficos de uso de CPU y memoria
-- Tráfico de red en tiempo real
-- Uso de disco
-- Tiempo de respuesta de comandos
+- Clasificación por tipo (CONNECTION, COMMAND, SCAN, ERROR, WARNING)
+- Visualización de la fuente y descripción de cada evento
+- Nivel de severidad indicado por colores
 
 ### Configuración
 
-- Configuración de red del gateway
-- Parámetros de escaneo
+- Configuración de parámetros del gateway
+- Dirección IP y puerto de escucha
+- Puerto para comunicación con PLCs
+- Intervalo de escaneo de red
 - Nivel de logging
-- Configuración de seguridad
+- Endpoint del sistema WMS
 
 ## Tecnologías Utilizadas
 
 - HTML5
-- CSS3 (con Flexbox y Grid)
-- JavaScript (ES6+)
-- Chart.js para gráficos
-- Font Awesome para íconos
-- Google Fonts (Roboto)
+- CSS3 con diseño responsivo
+- JavaScript (ES6+) sin frameworks adicionales
+- Chart.js para visualización de gráficos
+- Font Awesome para iconos
+- Google Fonts para tipografía
 
-## Cómo Usar
+## Integración con API REST
 
-1. Iniciar el servidor del gateway:
+La interfaz se comunica con el backend a través de una API RESTful:
 
-   ```
-   python src/main.py
-   ```
+- `GET /api/v1/plcs` - Obtener lista de PLCs
+- `GET /api/v1/plcs/{id}` - Obtener información de un PLC específico
+- `POST /api/v1/plcs` - Crear un nuevo PLC
+- `PUT /api/v1/plcs/{id}` - Actualizar un PLC existente
+- `DELETE /api/v1/plcs/{id}` - Eliminar un PLC
+- `GET /api/v1/commands` - Obtener historial de comandos
+- `GET /api/v1/events` - Obtener eventos del sistema
+- `GET /api/v1/metrics` - Obtener métricas de rendimiento
+- `GET /api/v1/stats` - Obtener estadísticas del sistema
 
-2. Abrir un navegador web y acceder a:
+## Diseño Responsivo
 
-   ```
-   http://localhost:8080
-   ```
+La interfaz está diseñada para funcionar correctamente en diferentes dispositivos:
 
-3. La interfaz web estará disponible con todas las funcionalidades.
+- Escritorio: Diseño de cuadrícula completa
+- Tabletas: Ajuste de columnas en cuadrícula
+- Móviles: Diseño de una sola columna con menú hamburguesa
+
+## Notificaciones
+
+El sistema muestra notificaciones en tiempo real para:
+
+- Confirmación de acciones realizadas
+- Errores en operaciones
+- Alertas de eventos importantes
+- Actualizaciones automáticas de datos
+
+## Seguridad
+
+- Todas las comunicaciones se realizan a través de HTTP (en entorno local)
+- Validación de datos en el cliente y servidor
+- Manejo de errores apropiado
 
 ## Personalización
 
 Para personalizar la interfaz:
 
-1. Modificar `styles.css` para cambiar los estilos
-2. Editar `script.js` para agregar nueva funcionalidad
-3. Actualizar `index.html` para modificar la estructura de la interfaz
+1. Modificar `styles.css` para cambiar el diseño visual
+2. Editar `script.js` para modificar la lógica de negocio
+3. Actualizar `index.html` para cambiar la estructura de la interfaz
 
-## Notas
+## Uso
 
-- Esta interfaz es completamente responsiva y funciona en dispositivos móviles y de escritorio
-- Todos los datos se actualizan en tiempo real mediante llamadas AJAX al servidor
-- La interfaz utiliza íconos de Font Awesome y fuentes de Google Fonts
-- Los gráficos son interactivos y se actualizan automáticamente
+1. Iniciar el servidor del gateway
+2. Abrir un navegador web
+3. Navegar a `http://localhost:8080` (o el puerto configurado)
+4. Utilizar el menú lateral para navegar entre las diferentes secciones
+
+## Mantenimiento
+
+- Los archivos se han modularizado para facilitar el mantenimiento
+- Código comentado para facilitar la comprensión
+- Estructura organizada por funcionalidades
+- Sin dependencias externas complejas
