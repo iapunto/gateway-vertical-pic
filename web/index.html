@@ -267,7 +267,7 @@
                     type="text"
                     class="form-control"
                     id="bind-address"
-                    placeholder="0.0.0.0"
+                    value=""
                   />
                 </div>
                 <div class="form-group">
@@ -276,7 +276,7 @@
                     type="number"
                     class="form-control"
                     id="bind-port"
-                    placeholder="8080"
+                    value=""
                   />
                 </div>
                 <div class="form-group">
@@ -285,7 +285,7 @@
                     type="number"
                     class="form-control"
                     id="plc-port"
-                    placeholder="3200"
+                    value=""
                   />
                 </div>
                 <div class="form-group">
@@ -296,14 +296,14 @@
                     type="number"
                     class="form-control"
                     id="scan-interval"
-                    placeholder="30"
+                    value=""
                   />
                 </div>
                 <div class="form-group">
                   <label for="log-level">Nivel de Log</label>
                   <select class="form-control" id="log-level">
                     <option value="DEBUG">DEBUG</option>
-                    <option value="INFO" selected>INFO</option>
+                    <option value="INFO">INFO</option>
                     <option value="WARNING">WARNING</option>
                     <option value="ERROR">ERROR</option>
                   </select>
@@ -314,7 +314,7 @@
                     type="text"
                     class="form-control"
                     id="wms-endpoint"
-                    placeholder="https://wms.example.com/api/v1/gateways"
+                    value=""
                   />
                 </div>
                 <div class="form-actions">
@@ -336,128 +336,25 @@
       </div>
     </div>
 
-    <!-- Add/Edit PLC Modal -->
-    <div id="plc-modal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 id="plc-modal-title">Nuevo PLC</h3>
-          <button class="close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form id="plc-form">
-            <input type="hidden" id="plc-id" />
-            <div class="form-group">
-              <label for="plc-name">Nombre *</label>
-              <input type="text" class="form-control" id="plc-name" required />
-            </div>
-            <div class="form-group">
-              <label for="plc-ip">Dirección IP *</label>
-              <input type="text" class="form-control" id="plc-ip" required />
-            </div>
-            <div class="form-group">
-              <label for="plc-port">Puerto *</label>
-              <input
-                type="number"
-                class="form-control"
-                id="plc-port"
-                value="3200"
-                required
-              />
-            </div>
-            <div class="form-group">
-              <label for="plc-type">Tipo *</label>
-              <select class="form-control" id="plc-type" required>
-                <option value="delta">Delta</option>
-                <option value="siemens">Siemens</option>
-                <option value="allen-bradley">Allen-Bradley</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="plc-description">Descripción</label>
-              <textarea
-                class="form-control"
-                id="plc-description"
-                rows="3"
-              ></textarea>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline close-modal">Cancelar</button>
-          <button class="btn btn-primary" id="save-plc-btn">Guardar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Delete PLC Confirmation Modal -->
-    <div id="delete-plc-modal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Confirmar Eliminación</h3>
-          <button class="close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p>
-            ¿Está seguro que desea eliminar el PLC
-            <strong id="delete-plc-name"></strong>?
-          </p>
-          <input type="hidden" id="delete-plc-id" />
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline close-modal">Cancelar</button>
-          <button class="btn btn-danger" id="confirm-delete-plc">
-            Eliminar
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Send Command Modal -->
-    <div id="command-modal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Enviar Comando</h3>
-          <button class="close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form id="command-form">
-            <div class="form-group">
-              <label for="command-select">Comando *</label>
-              <select class="form-control" id="command-select" required>
-                <option value="">Seleccionar comando...</option>
-                <option value="STATUS">Obtener Estado</option>
-                <option value="MOVE">Mover a Posición</option>
-                <option value="START">Iniciar</option>
-                <option value="STOP">Detener</option>
-                <option value="RESET">Reiniciar</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="command-plc">Máquina *</label>
-              <select class="form-control" id="command-plc" required>
-                <option value="">Seleccionar máquina...</option>
-              </select>
-            </div>
-            <div class="form-group" id="position-group" style="display: none">
-              <label for="position-input">Posición *</label>
-              <input
-                type="number"
-                class="form-control"
-                id="position-input"
-                min="0"
-              />
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline close-modal">Cancelar</button>
-          <button class="btn btn-primary" id="send-command-submit">
-            Enviar
-          </button>
-        </div>
-      </div>
-    </div>
-
+    <script>
+      // Establecer valores por defecto inmediatamente mientras se cargan los datos reales
+      document.addEventListener("DOMContentLoaded", function () {
+        // No establecer placeholders de carga, mejor dejarlos vacíos
+        const elements = [
+          "bind-address",
+          "bind-port",
+          "plc-port",
+          "scan-interval",
+          "wms-endpoint",
+        ];
+        elements.forEach((id) => {
+          const element = document.getElementById(id);
+          if (element) {
+            element.placeholder = "";
+          }
+        });
+      });
+    </script>
     <script src="script.js"></script>
   </body>
 </html>

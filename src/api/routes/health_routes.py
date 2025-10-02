@@ -5,8 +5,8 @@ Rutas para la salud y métricas del sistema
 """
 
 from flask import jsonify
-from health.health_checker import HealthChecker
-from monitoring import get_metrics_collector
+from src.health.health_checker import HealthChecker
+from src.monitoring import get_metrics_collector
 
 
 def register_health_routes(app, health_checker: HealthChecker, metrics_collector):

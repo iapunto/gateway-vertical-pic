@@ -15,12 +15,13 @@ import threading
 # Instancia global del gestor de base de datos
 _database_manager_instance = None
 
+
 def get_database_manager(db_path: str = "gateway.db") -> 'DatabaseManager':
     """Obtiene la instancia singleton del gestor de base de datos
-    
+
     Args:
         db_path: Ruta al archivo de base de datos SQLite
-        
+
     Returns:
         Instancia del DatabaseManager
     """
@@ -216,10 +217,12 @@ class DatabaseManager:
                 conn.close()
 
                 if rows_affected > 0:
-                    self.logger.info(f"PLC {plc_id} actualizado en la base de datos")
+                    self.logger.info(
+                        f"PLC {plc_id} actualizado en la base de datos")
                     return True
                 else:
-                    self.logger.warning(f"No se encontró el PLC {plc_id} para actualizar")
+                    self.logger.warning(
+                        f"No se encontró el PLC {plc_id} para actualizar")
                     return False
 
         except Exception as e:
@@ -646,7 +649,8 @@ class DatabaseManager:
                 conn.commit()
                 conn.close()
 
-                self.logger.info(f"Configuración {key} guardada en la base de datos")
+                self.logger.info(
+                    f"Configuración {key} guardada en la base de datos")
                 return True
 
         except Exception as e:
@@ -706,5 +710,6 @@ class DatabaseManager:
                 return {row['key']: row['value'] for row in rows}
 
         except Exception as e:
-            self.logger.error(f"Error obteniendo todas las configuraciones: {e}")
+            self.logger.error(
+                f"Error obteniendo todas las configuraciones: {e}")
             return {}

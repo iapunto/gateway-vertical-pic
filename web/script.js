@@ -8,6 +8,7 @@ const API_BASE_URL = "/api/v1";
 
 // Inicializar cuando el DOM esté cargado
 document.addEventListener("DOMContentLoaded", function () {
+  console.log("DOMContentLoaded disparado");
   // Inicializar navegación
   initNavigation();
 
@@ -22,14 +23,26 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Actualizar datos periódicamente
   setInterval(loadDashboardData, 30000); // Cada 30 segundos
+
+  // Cargar configuración y PLCs automáticamente al iniciar
+  setTimeout(() => {
+    console.log("Cargando datos automáticamente al iniciar");
+    loadConfigData();
+    loadPLCsData();
+  }, 500); // Cargar datos más rápidamente
 });
 
 // Inicializar navegación
 function initNavigation() {
+  console.log("Inicializando navegación");
   const navLinks = document.querySelectorAll(".sidebar-menu a");
   navLinks.forEach((link) => {
     link.addEventListener("click", function (e) {
       e.preventDefault();
+      console.log(
+        "Enlace de navegación clickeado",
+        this.getAttribute("data-view")
+      );
 
       // Remover clase activa de todos los enlaces
       navLinks.forEach((l) => l.classList.remove("active"));
@@ -46,6 +59,7 @@ function initNavigation() {
 
 // Cargar vista
 function loadView(viewName) {
+  console.log("Cargando vista:", viewName);
   // Ocultar todas las vistas
   const views = document.querySelectorAll('[id$="-view"]');
   views.forEach((view) => {
@@ -55,26 +69,35 @@ function loadView(viewName) {
   // Mostrar la vista solicitada
   const targetView = document.getElementById(viewName + "-view");
   if (targetView) {
+    console.log("Vista encontrada, mostrando:", viewName);
     targetView.classList.remove("hidden");
 
     // Cargar datos específicos de la vista
     switch (viewName) {
       case "dashboard":
+        console.log("Cargando datos del dashboard");
         loadDashboardData();
         break;
       case "plcs":
+        console.log("Cargando datos de PLCs");
         loadPLCsData();
         break;
       case "commands":
+        console.log("Cargando datos de comandos");
         loadCommandsData();
         break;
       case "events":
+        console.log("Cargando datos de eventos");
         loadEventsData();
         break;
       case "config":
-        loadConfigData();
+        console.log("Cargando datos de configuración");
+        // Verificar y cargar configuración
+        checkAndLoadConfig();
         break;
     }
+  } else {
+    console.log("Vista no encontrada:", viewName);
   }
 }
 
@@ -199,7 +222,9 @@ async function loadDashboardData() {
             ? "danger"
             : event.event_type === "WARNING"
             ? "warning"
-            : "info"
+            : event.event_type === "INFO"
+            ? "info"
+            : "secondary"
         }"></i> ${event.data} - ${eventTime}</p>`;
       });
     } else {
@@ -445,47 +470,109 @@ async function loadEventsData() {
 
 // Cargar datos de configuración
 async function loadConfigData() {
+  console.log("Iniciando loadConfigData");
+
   try {
     // Obtener configuraciones desde la API
+    console.log("Obteniendo configuraciones desde la API");
     const response = await fetch(`${API_BASE_URL}/config`);
-    const configs = await response.json();
+    console.log("Respuesta de la API recibida", response.status);
 
-    // Establecer valores en el formulario si existen en la base de datos
-    if (configs) {
-      document.getElementById("bind-address").value = 
-        configs["bind_address"] || "0.0.0.0";
-      document.getElementById("bind-port").value = 
-        configs["bind_port"] || "8080";
-      document.getElementById("plc-port").value = 
-        configs["plc_port"] || "3200";
-      document.getElementById("scan-interval").value = 
-        configs["scan_interval"] || "30";
-      document.getElementById("log-level").value = 
-        configs["log_level"] || "INFO";
-      document.getElementById("wms-endpoint").value = 
-        configs["wms_endpoint"] || "https://wms.example.com/api/v1/gateways";
-    } else {
-      // Valores por defecto si no hay configuraciones
-      document.getElementById("bind-address").value = "0.0.0.0";
-      document.getElementById("bind-port").value = "8080";
-      document.getElementById("plc-port").value = "3200";
-      document.getElementById("scan-interval").value = "30";
-      document.getElementById("log-level").value = "INFO";
-      document.getElementById("wms-endpoint").value =
-        "https://wms.example.com/api/v1/gateways";
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const configs = await response.json();
+    console.log("Configuraciones obtenidas", configs);
+
+    // Valores por defecto
+    const defaultValues = {
+      bind_address: "0.0.0.0",
+      bind_port: "8080",
+      plc_port: "3200",
+      scan_interval: "30",
+      log_level: "INFO",
+      wms_endpoint: "https://wms.example.com/api/v1/gateways",
+    };
+
+    // Combinar configuraciones obtenidas con valores por defecto
+    const finalConfigs = { ...defaultValues, ...configs };
+
+    // Establecer valores en el formulario inmediatamente
+    if (finalConfigs) {
+      console.log("Configuraciones encontradas, estableciendo valores");
+
+      // Establecer valores inmediatamente
+      const elements = {
+        "bind-address": finalConfigs["bind_address"],
+        "bind-port": finalConfigs["bind_port"],
+        "plc-port": finalConfigs["plc_port"],
+        "scan-interval": finalConfigs["scan_interval"],
+        "log-level": finalConfigs["log_level"],
+        "wms-endpoint": finalConfigs["wms_endpoint"],
+      };
+
+      // Actualizar todos los elementos
+      Object.keys(elements).forEach((id) => {
+        const element = document.getElementById(id);
+        if (element) {
+          // Para select, seleccionar la opción correcta
+          if (element.tagName === "SELECT") {
+            element.value = elements[id];
+          } else {
+            element.value = elements[id];
+          }
+          // Asegurar que no haya placeholder de carga
+          element.placeholder = "";
+          console.log(`Valor establecido para ${id}:`, element.value);
+        }
+      });
     }
   } catch (error) {
     console.error("Error cargando configuración:", error);
     showNotification("Error cargando configuración", "error");
-    
-    // Valores por defecto en caso de error
-    document.getElementById("bind-address").value = "0.0.0.0";
-    document.getElementById("bind-port").value = "8080";
-    document.getElementById("plc-port").value = "3200";
-    document.getElementById("scan-interval").value = "30";
-    document.getElementById("log-level").value = "INFO";
-    document.getElementById("wms-endpoint").value =
-      "https://wms.example.com/api/v1/gateways";
+
+    // Establecer valores por defecto en caso de error
+    const defaultElements = {
+      "bind-address": "0.0.0.0",
+      "bind-port": "8080",
+      "plc-port": "3200",
+      "scan-interval": "30",
+      "log-level": "INFO",
+      "wms-endpoint": "https://wms.example.com/api/v1/gateways",
+    };
+
+    Object.keys(defaultElements).forEach((id) => {
+      const element = document.getElementById(id);
+      if (element) {
+        if (element.tagName === "SELECT") {
+          element.value = defaultElements[id];
+        } else {
+          element.value = defaultElements[id];
+        }
+        element.placeholder = "";
+        console.log(`Valor por defecto establecido para ${id}:`, element.value);
+      }
+    });
+  }
+}
+
+// Verificar y cargar configuración si es necesario
+function checkAndLoadConfig() {
+  console.log("Verificando si es necesario cargar configuración");
+  const bindAddressElement = document.getElementById("bind-address");
+
+  // Si el elemento existe pero no tiene valor (o tiene el valor por defecto), cargar configuración
+  if (
+    bindAddressElement &&
+    (!bindAddressElement.value || bindAddressElement.value === "0.0.0.0")
+  ) {
+    console.log(
+      "Configuración no cargada o con valores por defecto, cargando desde API"
+    );
+    loadConfigData();
+  } else {
+    console.log("Configuración ya cargada o con valores personalizados");
   }
 }
 
@@ -723,12 +810,20 @@ async function saveConfig() {
 
     // Guardar cada configuración individualmente
     const configs = [
-      { key: "bind_address", value: bindAddress, description: "Dirección IP de escucha" },
+      {
+        key: "bind_address",
+        value: bindAddress,
+        description: "Dirección IP de escucha",
+      },
       { key: "bind_port", value: bindPort, description: "Puerto de escucha" },
       { key: "plc_port", value: plcPort, description: "Puerto PLC" },
-      { key: "scan_interval", value: scanInterval, description: "Intervalo de escaneo" },
+      {
+        key: "scan_interval",
+        value: scanInterval,
+        description: "Intervalo de escaneo",
+      },
       { key: "log_level", value: logLevel, description: "Nivel de log" },
-      { key: "wms_endpoint", value: wmsEndpoint, description: "Endpoint WMS" }
+      { key: "wms_endpoint", value: wmsEndpoint, description: "Endpoint WMS" },
     ];
 
     // Enviar cada configuración a la API
@@ -746,7 +841,9 @@ async function saveConfig() {
         success = false;
         const errorData = await response.json();
         showNotification(
-          `Error guardando configuración ${config.key}: ${errorData.error || "Error desconocido"}`,
+          `Error guardando configuración ${config.key}: ${
+            errorData.error || "Error desconocido"
+          }`,
           "error"
         );
         break;

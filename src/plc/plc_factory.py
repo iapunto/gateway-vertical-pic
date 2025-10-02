@@ -5,8 +5,8 @@ Fábrica para crear instancias de PLCs
 """
 
 from typing import Dict, Type
-from interfaces.plc_interface import PLCInterface
-from plc.delta_plc import DeltaPLC
+from src.interfaces.plc_interface import PLCInterface
+from src.plc.delta_plc import DeltaPLC
 
 # Registro de tipos de PLCs disponibles
 PLC_TYPES: Dict[str, Type[PLCInterface]] = {
