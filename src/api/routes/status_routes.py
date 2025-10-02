@@ -5,7 +5,7 @@ Rutas para el estado y control del gateway y PLCs
 """
 
 from flask import jsonify, request
-from adapters.api_adapter import APIAdapter
+from src.adapters.api_adapter import APIAdapter
 
 
 def register_status_routes(app, adapter: APIAdapter):

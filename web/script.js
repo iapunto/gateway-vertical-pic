@@ -1,15 +1,14 @@
-// Funcionalidad adicional para la interfaz web del Gateway
+// Funcionalidad mejorada para la interfaz web del Gateway con integración API REST
 
 // Variables globales
 let plcStatusChart = null;
 let responseTimeChart = null;
-let cpuChart = null;
-let memoryChart = null;
-let networkChart = null;
-let diskChart = null;
+let currentEditingPLC = null;
+const API_BASE_URL = "/api/v1";
 
 // Inicializar cuando el DOM esté cargado
 document.addEventListener("DOMContentLoaded", function () {
+  console.log("DOMContentLoaded disparado");
   // Inicializar navegación
   initNavigation();
 
@@ -24,14 +23,26 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Actualizar datos periódicamente
   setInterval(loadDashboardData, 30000); // Cada 30 segundos
+
+  // Cargar configuración y PLCs automáticamente al iniciar
+  setTimeout(() => {
+    console.log("Cargando datos automáticamente al iniciar");
+    loadConfigData();
+    loadPLCsData();
+  }, 500); // Cargar datos más rápidamente
 });
 
 // Inicializar navegación
 function initNavigation() {
+  console.log("Inicializando navegación");
   const navLinks = document.querySelectorAll(".sidebar-menu a");
   navLinks.forEach((link) => {
     link.addEventListener("click", function (e) {
       e.preventDefault();
+      console.log(
+        "Enlace de navegación clickeado",
+        this.getAttribute("data-view")
+      );
 
       // Remover clase activa de todos los enlaces
       navLinks.forEach((l) => l.classList.remove("active"));
@@ -48,38 +59,45 @@ function initNavigation() {
 
 // Cargar vista
 function loadView(viewName) {
+  console.log("Cargando vista:", viewName);
   // Ocultar todas las vistas
   const views = document.querySelectorAll('[id$="-view"]');
   views.forEach((view) => {
-    view.style.display = "none";
+    view.classList.add("hidden");
   });
 
   // Mostrar la vista solicitada
   const targetView = document.getElementById(viewName + "-view");
   if (targetView) {
-    targetView.style.display = "block";
+    console.log("Vista encontrada, mostrando:", viewName);
+    targetView.classList.remove("hidden");
 
     // Cargar datos específicos de la vista
     switch (viewName) {
       case "dashboard":
+        console.log("Cargando datos del dashboard");
         loadDashboardData();
         break;
       case "plcs":
+        console.log("Cargando datos de PLCs");
         loadPLCsData();
         break;
       case "commands":
+        console.log("Cargando datos de comandos");
         loadCommandsData();
         break;
       case "events":
+        console.log("Cargando datos de eventos");
         loadEventsData();
         break;
-      case "monitoring":
-        loadMonitoringData();
-        break;
       case "config":
-        loadConfigData();
+        console.log("Cargando datos de configuración");
+        // Verificar y cargar configuración
+        checkAndLoadConfig();
         break;
     }
+  } else {
+    console.log("Vista no encontrada:", viewName);
   }
 }
 
@@ -138,521 +156,11 @@ function initCharts() {
       },
     },
   });
-
-  // Gráfico de CPU
-  const cpuCtx = document.getElementById("cpu-chart").getContext("2d");
-  cpuChart = new Chart(cpuCtx, {
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [
-        {
-          label: "Uso de CPU (%)",
-          data: [],
-          borderColor: "#4361ee",
-          backgroundColor: "rgba(67, 97, 238, 0.1)",
-          tension: 0.4,
-          fill: true,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: 100,
-        },
-      },
-    },
-  });
-
-  // Gráfico de memoria
-  const memoryCtx = document.getElementById("memory-chart").getContext("2d");
-  memoryChart = new Chart(memoryCtx, {
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [
-        {
-          label: "Uso de Memoria (%)",
-          data: [],
-          borderColor: "#4895ef",
-          backgroundColor: "rgba(72, 149, 239, 0.1)",
-          tension: 0.4,
-          fill: true,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: 100,
-        },
-      },
-    },
-  });
-
-  // Gráfico de tráfico de red
-  const networkCtx = document.getElementById("network-chart").getContext("2d");
-  networkChart = new Chart(networkCtx, {
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [
-        {
-          label: "Entrada (KB/s)",
-          data: [],
-          borderColor: "#4cc9f0",
-          backgroundColor: "rgba(76, 201, 240, 0.1)",
-          tension: 0.4,
-          fill: true,
-        },
-        {
-          label: "Salida (KB/s)",
-          data: [],
-          borderColor: "#4895ef",
-          backgroundColor: "rgba(72, 149, 239, 0.1)",
-          tension: 0.4,
-          fill: true,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-        },
-      },
-    },
-  });
-
-  // Gráfico de uso de disco
-  const diskCtx = document.getElementById("disk-chart").getContext("2d");
-  diskChart = new Chart(diskCtx, {
-    type: "doughnut",
-    data: {
-      labels: ["Usado", "Libre"],
-      datasets: [
-        {
-          data: [0, 0],
-          backgroundColor: ["#4361ee", "#e9ecef"],
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: "bottom",
-        },
-      },
-    },
-  });
-}
-
-// Cargar datos del dashboard
-function loadDashboardData() {
-  // Simular datos para el dashboard
-  document.getElementById("plc-count").textContent = "5";
-  document.getElementById("command-count").textContent = "24";
-  document.getElementById("event-count").textContent = "8";
-
-  // Actualizar estado del sistema
-  document.getElementById("system-status-content").innerHTML = `
-        <p><i class="fas fa-check-circle text-success"></i> Sistema operativo</p>
-        <p><i class="fas fa-check-circle text-success"></i> Conexión a red estable</p>
-        <p><i class="fas fa-check-circle text-success"></i> Base de datos accesible</p>
-        <p><i class="fas fa-check-circle text-success"></i> API REST funcionando</p>
-    `;
-
-  // Actualizar eventos recientes
-  document.getElementById("recent-events-content").innerHTML = `
-        <p><i class="fas fa-bell text-warning"></i> PLC-001 conectado - 10:30 AM</p>
-        <p><i class="fas fa-bell text-success"></i> Comando MOVE ejecutado - 10:25 AM</p>
-        <p><i class="fas fa-bell text-info"></i> Escaneo de red completado - 10:20 AM</p>
-        <p><i class="fas fa-bell text-warning"></i> PLC-003 reconectado - 10:15 AM</p>
-    `;
-
-  // Actualizar gráficos
-  if (plcStatusChart) {
-    plcStatusChart.data.datasets[0].data = [4, 1, 0];
-    plcStatusChart.update();
-  }
-
-  // Actualizar gráfico de tiempo de respuesta con datos simulados
-  if (responseTimeChart) {
-    const now = new Date();
-    const times = [];
-    const data = [];
-
-    for (let i = 9; i >= 0; i--) {
-      const time = new Date(now.getTime() - i * 60000);
-      times.push(time.toTimeString().substring(0, 5));
-      data.push(Math.floor(Math.random() * 100) + 50);
-    }
-
-    responseTimeChart.data.labels = times;
-    responseTimeChart.data.datasets[0].data = data;
-    responseTimeChart.update();
-  }
-}
-
-// Cargar datos de PLCs
-function loadPLCsData() {
-  // Simular datos de PLCs
-  const plcsTable = document
-    .getElementById("plcs-table")
-    .getElementsByTagName("tbody")[0];
-  plcsTable.innerHTML = "";
-
-  const plcs = [
-    {
-      id: "PLC-001",
-      ip: "192.168.1.101",
-      status: "online",
-      lastSeen: "2023-05-15 10:30:25",
-    },
-    {
-      id: "PLC-002",
-      ip: "192.168.1.102",
-      status: "online",
-      lastSeen: "2023-05-15 10:28:42",
-    },
-    {
-      id: "PLC-003",
-      ip: "192.168.1.103",
-      status: "offline",
-      lastSeen: "2023-05-15 09:15:30",
-    },
-    {
-      id: "PLC-004",
-      ip: "192.168.1.104",
-      status: "online",
-      lastSeen: "2023-05-15 10:32:10",
-    },
-    {
-      id: "PLC-005",
-      ip: "192.168.1.105",
-      status: "online",
-      lastSeen: "2023-05-15 10:29:55",
-    },
-  ];
-
-  plcs.forEach((plc) => {
-    const row = plcsTable.insertRow();
-    row.innerHTML = `
-            <td>${plc.id}</td>
-            <td>${plc.ip}</td>
-            <td>
-                <span class="status-indicator status-${
-                  plc.status === "online" ? "online" : "offline"
-                }"></span>
-                ${plc.status === "online" ? "En línea" : "Fuera de línea"}
-            </td>
-            <td>${plc.lastSeen}</td>
-            <td>
-                <button class="btn btn-outline btn-sm" onclick="openCommandModal('${
-                  plc.id
-                }')">
-                    <i class="fas fa-terminal"></i> Comando
-                </button>
-            </td>
-        `;
-  });
-}
-
-// Cargar datos de comandos
-function loadCommandsData() {
-  // Simular datos de comandos
-  const commandsTable = document
-    .getElementById("commands-table")
-    .getElementsByTagName("tbody")[0];
-  commandsTable.innerHTML = "";
-
-  const commands = [
-    {
-      time: "2023-05-15 10:30:25",
-      command: "MOVE",
-      machine: "PLC-001",
-      status: "success",
-      response: "OK",
-    },
-    {
-      time: "2023-05-15 10:28:42",
-      command: "STATUS",
-      machine: "PLC-002",
-      status: "success",
-      response: "OK",
-    },
-    {
-      time: "2023-05-15 10:25:15",
-      command: "START",
-      machine: "PLC-004",
-      status: "success",
-      response: "OK",
-    },
-    {
-      time: "2023-05-15 10:20:30",
-      command: "MOVE",
-      machine: "PLC-001",
-      status: "success",
-      response: "OK",
-    },
-    {
-      time: "2023-05-15 10:15:45",
-      command: "STOP",
-      machine: "PLC-003",
-      status: "error",
-      response: "TIMEOUT",
-    },
-  ];
-
-  commands.forEach((cmd) => {
-    const row = commandsTable.insertRow();
-    row.innerHTML = `
-            <td>${cmd.time}</td>
-            <td>${cmd.command}</td>
-            <td>${cmd.machine}</td>
-            <td>
-                <span class="status-indicator status-${
-                  cmd.status === "success" ? "online" : "offline"
-                }"></span>
-                ${cmd.status === "success" ? "Éxito" : "Error"}
-            </td>
-            <td>${cmd.response}</td>
-        `;
-  });
-}
-
-// Cargar datos de eventos
-function loadEventsData() {
-  // Simular datos de eventos
-  const eventsTable = document
-    .getElementById("events-table")
-    .getElementsByTagName("tbody")[0];
-  eventsTable.innerHTML = "";
-
-  const events = [
-    {
-      time: "2023-05-15 10:30:25",
-      type: "CONNECTION",
-      description: "PLC-001 conectado",
-      machine: "PLC-001",
-      level: "INFO",
-    },
-    {
-      time: "2023-05-15 10:28:42",
-      type: "COMMAND",
-      description: "Comando MOVE ejecutado",
-      machine: "PLC-001",
-      level: "INFO",
-    },
-    {
-      time: "2023-05-15 10:25:15",
-      type: "SCAN",
-      description: "Escaneo de red completado",
-      machine: "SYSTEM",
-      level: "INFO",
-    },
-    {
-      time: "2023-05-15 10:20:30",
-      type: "CONNECTION",
-      description: "PLC-003 reconectado",
-      machine: "PLC-003",
-      level: "WARNING",
-    },
-    {
-      time: "2023-05-15 10:15:45",
-      type: "ERROR",
-      description: "Timeout en comando STOP",
-      machine: "PLC-003",
-      level: "ERROR",
-    },
-  ];
-
-  events.forEach((event) => {
-    const row = eventsTable.insertRow();
-    row.innerHTML = `
-            <td>${event.time}</td>
-            <td>${event.type}</td>
-            <td>${event.description}</td>
-            <td>${event.machine}</td>
-            <td>
-                <span class="badge badge-${event.level.toLowerCase()}">${
-      event.level
-    }</span>
-            </td>
-        `;
-  });
-}
-
-// Cargar datos de monitoreo
-function loadMonitoringData() {
-  // Simular datos de monitoreo
-  const now = new Date();
-  const times = [];
-  const cpuData = [];
-  const memoryData = [];
-  const networkInData = [];
-  const networkOutData = [];
-
-  for (let i = 9; i >= 0; i--) {
-    const time = new Date(now.getTime() - i * 60000);
-    times.push(time.toTimeString().substring(0, 5));
-    cpuData.push(Math.floor(Math.random() * 30) + 20);
-    memoryData.push(Math.floor(Math.random() * 20) + 40);
-    networkInData.push(Math.floor(Math.random() * 100) + 50);
-    networkOutData.push(Math.floor(Math.random() * 80) + 30);
-  }
-
-  if (cpuChart) {
-    cpuChart.data.labels = times;
-    cpuChart.data.datasets[0].data = cpuData;
-    cpuChart.update();
-  }
-
-  if (memoryChart) {
-    memoryChart.data.labels = times;
-    memoryChart.data.datasets[0].data = memoryData;
-    memoryChart.update();
-  }
-
-  if (networkChart) {
-    networkChart.data.labels = times;
-    networkChart.data.datasets[0].data = networkInData;
-    networkChart.data.datasets[1].data = networkOutData;
-    networkChart.update();
-  }
-
-  // Actualizar gráfico de disco
-  if (diskChart) {
-    diskChart.data.datasets[0].data = [65, 35]; // 65% usado, 35% libre
-    diskChart.update();
-  }
-}
-
-// Cargar datos de configuración
-function loadConfigData() {
-  // Simular carga de configuración
-  document.getElementById("bind-address").value = "0.0.0.0";
-  document.getElementById("bind-port").value = "8080";
-  document.getElementById("scan-interval").value = "30";
-  document.getElementById("log-level").value = "INFO";
-}
-
-// Configurar eventos
-function setupEventListeners() {
-  // Botón de escaneo de PLCs
-  document.getElementById("scan-plcs").addEventListener("click", function () {
-    showNotification("Escaneo de red iniciado...", "info");
-    // Simular escaneo
-    setTimeout(() => {
-      showNotification(
-        "Escaneo de red completado. Se encontraron 2 nuevos PLCs.",
-        "success"
-      );
-      loadPLCsData();
-    }, 2000);
-  });
-
-  // Botón de enviar comando
-  document
-    .getElementById("send-command-btn")
-    .addEventListener("click", function () {
-      openCommandModal();
-    });
-
-  // Botón de refrescar PLCs
-  document
-    .getElementById("refresh-plcs")
-    .addEventListener("click", function () {
-      showNotification("Actualizando lista de PLCs...", "info");
-      loadPLCsData();
-      setTimeout(() => {
-        showNotification("Lista de PLCs actualizada.", "success");
-      }, 500);
-    });
-
-  // Botón de refrescar comandos
-  document
-    .getElementById("refresh-commands")
-    .addEventListener("click", function () {
-      showNotification("Actualizando lista de comandos...", "info");
-      loadCommandsData();
-      setTimeout(() => {
-        showNotification("Lista de comandos actualizada.", "success");
-      }, 500);
-    });
-
-  // Botón de refrescar eventos
-  document
-    .getElementById("refresh-events")
-    .addEventListener("click", function () {
-      showNotification("Actualizando lista de eventos...", "info");
-      loadEventsData();
-      setTimeout(() => {
-        showNotification("Lista de eventos actualizada.", "success");
-      }, 500);
-    });
-
-  // Botón de refrescar estado
-  document
-    .getElementById("refresh-status")
-    .addEventListener("click", function () {
-      showNotification("Actualizando estado del sistema...", "info");
-      loadDashboardData();
-      setTimeout(() => {
-        showNotification("Estado del sistema actualizado.", "success");
-      }, 500);
-    });
-
-  // Cambio en el selector de comando
-  document
-    .getElementById("command-select")
-    .addEventListener("change", function () {
-      const positionGroup = document.getElementById("position-group");
-      if (this.value === "MOVE") {
-        positionGroup.style.display = "block";
-      } else {
-        positionGroup.style.display = "none";
-      }
-    });
-
-  // Botón de enviar comando en modal
-  document
-    .getElementById("send-command-submit")
-    .addEventListener("click", function () {
-      sendCommand();
-    });
-
-  // Cerrar modal
-  const closeButtons = document.querySelectorAll(".close, .close-modal");
-  closeButtons.forEach((button) => {
-    button.addEventListener("click", function () {
-      document.getElementById("command-modal").style.display = "none";
-    });
-  });
-
-  // Formulario de configuración
-  document
-    .getElementById("config-form")
-    .addEventListener("submit", function (e) {
-      e.preventDefault();
-      saveConfig();
-    });
 }
 
 // Mostrar notificación
-function showNotification(message, type) {
-  // Crear elemento de notificación
+function showNotification(message, type = "info") {
+  const container = document.getElementById("notifications-container");
   const notification = document.createElement("div");
   notification.className = `alert alert-${type}`;
   notification.innerHTML = `
@@ -661,46 +169,594 @@ function showNotification(message, type) {
             ? "check-circle"
             : type === "error"
             ? "exclamation-circle"
+            : type === "warning"
+            ? "exclamation-triangle"
             : "info-circle"
         }"></i>
         ${message}
     `;
 
-  // Agregar al inicio del contenido principal
-  const mainContent = document.querySelector(".main-content");
-  mainContent.insertBefore(notification, mainContent.firstChild);
+  container.appendChild(notification);
 
   // Remover después de 3 segundos
   setTimeout(() => {
-    notification.remove();
+    if (notification.parentNode) {
+      notification.parentNode.removeChild(notification);
+    }
   }, 3000);
 }
 
-// Abrir modal de comando
-function openCommandModal(machineId = null) {
-  // Cargar máquinas disponibles
-  const machineSelect = document.getElementById("machine-select");
-  machineSelect.innerHTML = '<option value="">Seleccionar máquina...</option>';
+// Funciones para interactuar con la API REST
 
-  const machines = ["PLC-001", "PLC-002", "PLC-003", "PLC-004", "PLC-005"];
-  machines.forEach((machine) => {
-    const option = document.createElement("option");
-    option.value = machine;
-    option.textContent = machine;
-    if (machineId && machineId === machine) {
-      option.selected = true;
+// Obtener datos del dashboard
+async function loadDashboardData() {
+  try {
+    // Obtener estadísticas
+    const statsResponse = await fetch(`${API_BASE_URL}/stats`);
+    const stats = await statsResponse.json();
+
+    // Actualizar contadores
+    document.getElementById("plc-count").textContent = stats.plc_count || 0;
+    document.getElementById("command-count").textContent =
+      stats.command_count || 0;
+    document.getElementById("event-count").textContent = stats.event_count || 0;
+
+    // Actualizar estado del sistema
+    document.getElementById("system-status-content").innerHTML = `
+            <p><i class="fas fa-check-circle text-success"></i> Sistema operativo</p>
+            <p><i class="fas fa-check-circle text-success"></i> Conexión a red estable</p>
+            <p><i class="fas fa-check-circle text-success"></i> Base de datos accesible</p>
+            <p><i class="fas fa-check-circle text-success"></i> API REST funcionando</p>
+        `;
+
+    // Actualizar eventos recientes
+    const eventsResponse = await fetch(`${API_BASE_URL}/events?limit=4`);
+    const events = await eventsResponse.json();
+
+    let eventsHtml = "";
+    if (events && events.length > 0) {
+      events.forEach((event) => {
+        const eventTime = new Date(event.timestamp).toLocaleTimeString();
+        eventsHtml += `<p><i class="fas fa-bell text-${
+          event.event_type === "ERROR"
+            ? "danger"
+            : event.event_type === "WARNING"
+            ? "warning"
+            : event.event_type === "INFO"
+            ? "info"
+            : "secondary"
+        }"></i> ${event.data} - ${eventTime}</p>`;
+      });
+    } else {
+      eventsHtml = "<p>No hay eventos recientes</p>";
     }
-    machineSelect.appendChild(option);
-  });
+    document.getElementById("recent-events-content").innerHTML = eventsHtml;
+
+    // Actualizar gráficos
+    updateCharts();
+  } catch (error) {
+    console.error("Error cargando datos del dashboard:", error);
+    showNotification("Error cargando datos del dashboard", "error");
+  }
+}
+
+// Actualizar gráficos
+async function updateCharts() {
+  try {
+    // Actualizar gráfico de estado de PLCs
+    if (plcStatusChart) {
+      // Obtener estado de PLCs
+      const plcsResponse = await fetch(`${API_BASE_URL}/plcs`);
+      const plcs = await plcsResponse.json();
+
+      let online = 0,
+        offline = 0,
+        error = 0;
+      if (plcs && plcs.length > 0) {
+        plcs.forEach((plc) => {
+          // En una implementación real, aquí se verificaría el estado real del PLC
+          // Por ahora, simulamos basado en algún campo
+          if (plc.status === "online") {
+            online++;
+          } else if (plc.status === "offline") {
+            offline++;
+          } else {
+            error++;
+          }
+        });
+      }
+
+      plcStatusChart.data.datasets[0].data = [online, offline, error];
+      plcStatusChart.update();
+    }
+
+    // Actualizar gráfico de tiempo de respuesta
+    if (responseTimeChart) {
+      // Obtener métricas de respuesta
+      const metricsResponse = await fetch(
+        `${API_BASE_URL}/metrics?type=response_time&hours=1`
+      );
+      const metrics = await metricsResponse.json();
+
+      if (metrics && metrics.length > 0) {
+        const times = [];
+        const data = [];
+
+        // Tomar las últimas 10 métricas
+        const recentMetrics = metrics.slice(-10);
+        recentMetrics.forEach((metric) => {
+          const time = new Date(metric.timestamp).toLocaleTimeString();
+          times.push(time);
+          data.push(metric.value || 0);
+        });
+
+        responseTimeChart.data.labels = times;
+        responseTimeChart.data.datasets[0].data = data;
+        responseTimeChart.update();
+      }
+    }
+  } catch (error) {
+    console.error("Error actualizando gráficos:", error);
+  }
+}
+
+// Cargar datos de PLCs
+async function loadPLCsData() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/plcs`);
+    const plcs = await response.json();
+
+    const plcsTable = document
+      .getElementById("plcs-table")
+      .getElementsByTagName("tbody")[0];
+    plcsTable.innerHTML = "";
+
+    if (!plcs || plcs.length === 0) {
+      const row = plcsTable.insertRow();
+      row.innerHTML =
+        '<td colspan="7" class="text-center">No hay PLCs registrados</td>';
+      return;
+    }
+
+    plcs.forEach((plc) => {
+      const row = plcsTable.insertRow();
+      row.innerHTML = `
+                <td>${plc.plc_id || plc.id}</td>
+                <td>${plc.name || "Sin nombre"}</td>
+                <td>${plc.ip_address || "N/A"}</td>
+                <td>${plc.port || "N/A"}</td>
+                <td>
+                    <span class="status-indicator status-${
+                      plc.status === "online" ? "online" : "offline"
+                    }"></span>
+                    ${plc.status === "online" ? "En línea" : "Fuera de línea"}
+                </td>
+                <td>${
+                  plc.updated_at
+                    ? new Date(plc.updated_at).toLocaleString()
+                    : "N/A"
+                }</td>
+                <td>
+                    <button class="btn btn-outline btn-sm edit-plc" data-id="${
+                      plc.plc_id || plc.id
+                    }">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-danger btn-sm delete-plc" data-id="${
+                      plc.plc_id || plc.id
+                    }" data-name="${plc.name || plc.plc_id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+    });
+
+    // Agregar eventos a los botones
+    document.querySelectorAll(".edit-plc").forEach((button) => {
+      button.addEventListener("click", function () {
+        const plcId = this.getAttribute("data-id");
+        editPLC(plcId);
+      });
+    });
+
+    document.querySelectorAll(".delete-plc").forEach((button) => {
+      button.addEventListener("click", function () {
+        const plcId = this.getAttribute("data-id");
+        const plcName = this.getAttribute("data-name");
+        deletePLC(plcId, plcName);
+      });
+    });
+  } catch (error) {
+    console.error("Error cargando PLCs:", error);
+    showNotification("Error cargando PLCs", "error");
+  }
+}
+
+// Cargar datos de comandos
+async function loadCommandsData() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/commands?limit=20`);
+    const commands = await response.json();
+
+    const commandsTable = document
+      .getElementById("commands-table")
+      .getElementsByTagName("tbody")[0];
+    commandsTable.innerHTML = "";
+
+    if (!commands || commands.length === 0) {
+      const row = commandsTable.insertRow();
+      row.innerHTML =
+        '<td colspan="6" class="text-center">No hay comandos registrados</td>';
+      return;
+    }
+
+    commands.forEach((cmd) => {
+      const row = commandsTable.insertRow();
+      row.innerHTML = `
+                <td>${
+                  cmd.timestamp
+                    ? new Date(cmd.timestamp).toLocaleString()
+                    : "N/A"
+                }</td>
+                <td>${cmd.command || "N/A"}</td>
+                <td>${cmd.plc_id || "N/A"}</td>
+                <td>${
+                  cmd.argument !== null && cmd.argument !== undefined
+                    ? cmd.argument
+                    : "-"
+                }</td>
+                <td>
+                    <span class="status-indicator status-${
+                      cmd.success ? "online" : "offline"
+                    }"></span>
+                    ${cmd.success ? "Éxito" : "Error"}
+                </td>
+                <td>${cmd.result || "-"}</td>
+            `;
+    });
+  } catch (error) {
+    console.error("Error cargando comandos:", error);
+    showNotification("Error cargando comandos", "error");
+  }
+}
+
+// Cargar datos de eventos
+async function loadEventsData() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/events?limit=50`);
+    const events = await response.json();
+
+    const eventsTable = document
+      .getElementById("events-table")
+      .getElementsByTagName("tbody")[0];
+    eventsTable.innerHTML = "";
+
+    if (!events || events.length === 0) {
+      const row = eventsTable.insertRow();
+      row.innerHTML =
+        '<td colspan="5" class="text-center">No hay eventos registrados</td>';
+      return;
+    }
+
+    events.forEach((event) => {
+      const row = eventsTable.insertRow();
+      row.innerHTML = `
+                <td>${
+                  event.timestamp
+                    ? new Date(event.timestamp).toLocaleString()
+                    : "N/A"
+                }</td>
+                <td>${event.event_type || "N/A"}</td>
+                <td>${event.data || "N/A"}</td>
+                <td>${event.source || "N/A"}</td>
+                <td>
+                    <span class="badge badge-${
+                      event.event_type === "ERROR"
+                        ? "danger"
+                        : event.event_type === "WARNING"
+                        ? "warning"
+                        : event.event_type === "INFO"
+                        ? "info"
+                        : "secondary"
+                    }">${event.event_type || "N/A"}</span>
+                </td>
+            `;
+    });
+  } catch (error) {
+    console.error("Error cargando eventos:", error);
+    showNotification("Error cargando eventos", "error");
+  }
+}
+
+// Cargar datos de configuración
+async function loadConfigData() {
+  console.log("Iniciando loadConfigData");
+
+  try {
+    // Obtener configuraciones desde la API
+    console.log("Obteniendo configuraciones desde la API");
+    const response = await fetch(`${API_BASE_URL}/config`);
+    console.log("Respuesta de la API recibida", response.status);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const configs = await response.json();
+    console.log("Configuraciones obtenidas", configs);
+
+    // Valores por defecto
+    const defaultValues = {
+      bind_address: "0.0.0.0",
+      bind_port: "8080",
+      plc_port: "3200",
+      scan_interval: "30",
+      log_level: "INFO",
+      wms_endpoint: "https://wms.example.com/api/v1/gateways",
+    };
+
+    // Combinar configuraciones obtenidas con valores por defecto
+    const finalConfigs = { ...defaultValues, ...configs };
+
+    // Establecer valores en el formulario inmediatamente
+    if (finalConfigs) {
+      console.log("Configuraciones encontradas, estableciendo valores");
+
+      // Establecer valores inmediatamente
+      const elements = {
+        "bind-address": finalConfigs["bind_address"],
+        "bind-port": finalConfigs["bind_port"],
+        "plc-port": finalConfigs["plc_port"],
+        "scan-interval": finalConfigs["scan_interval"],
+        "log-level": finalConfigs["log_level"],
+        "wms-endpoint": finalConfigs["wms_endpoint"],
+      };
+
+      // Actualizar todos los elementos
+      Object.keys(elements).forEach((id) => {
+        const element = document.getElementById(id);
+        if (element) {
+          // Para select, seleccionar la opción correcta
+          if (element.tagName === "SELECT") {
+            element.value = elements[id];
+          } else {
+            element.value = elements[id];
+          }
+          // Asegurar que no haya placeholder de carga
+          element.placeholder = "";
+          console.log(`Valor establecido para ${id}:`, element.value);
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Error cargando configuración:", error);
+    showNotification("Error cargando configuración", "error");
+
+    // Establecer valores por defecto en caso de error
+    const defaultElements = {
+      "bind-address": "0.0.0.0",
+      "bind-port": "8080",
+      "plc-port": "3200",
+      "scan-interval": "30",
+      "log-level": "INFO",
+      "wms-endpoint": "https://wms.example.com/api/v1/gateways",
+    };
+
+    Object.keys(defaultElements).forEach((id) => {
+      const element = document.getElementById(id);
+      if (element) {
+        if (element.tagName === "SELECT") {
+          element.value = defaultElements[id];
+        } else {
+          element.value = defaultElements[id];
+        }
+        element.placeholder = "";
+        console.log(`Valor por defecto establecido para ${id}:`, element.value);
+      }
+    });
+  }
+}
+
+// Verificar y cargar configuración si es necesario
+function checkAndLoadConfig() {
+  console.log("Verificando si es necesario cargar configuración");
+  const bindAddressElement = document.getElementById("bind-address");
+
+  // Si el elemento existe pero no tiene valor (o tiene el valor por defecto), cargar configuración
+  if (
+    bindAddressElement &&
+    (!bindAddressElement.value || bindAddressElement.value === "0.0.0.0")
+  ) {
+    console.log(
+      "Configuración no cargada o con valores por defecto, cargando desde API"
+    );
+    loadConfigData();
+  } else {
+    console.log("Configuración ya cargada o con valores personalizados");
+  }
+}
+
+// Abrir modal de PLC
+async function openPLCModal(plcId = null) {
+  const modal = document.getElementById("plc-modal");
+  const title = document.getElementById("plc-modal-title");
+
+  if (plcId) {
+    // Editar PLC existente
+    try {
+      const response = await fetch(`${API_BASE_URL}/plcs/${plcId}`);
+      const plc = await response.json();
+
+      if (plc) {
+        title.textContent = "Editar PLC";
+        document.getElementById("plc-id").value = plc.plc_id || plc.id;
+        document.getElementById("plc-name").value = plc.name || "";
+        document.getElementById("plc-ip").value = plc.ip_address || "";
+        document.getElementById("plc-port").value = plc.port || 3200;
+        document.getElementById("plc-type").value = plc.type || "delta";
+        document.getElementById("plc-description").value =
+          plc.description || "";
+        currentEditingPLC = plc.plc_id || plc.id;
+      } else {
+        showNotification("PLC no encontrado", "error");
+        return;
+      }
+    } catch (error) {
+      console.error("Error obteniendo PLC:", error);
+      showNotification("Error obteniendo datos del PLC", "error");
+      return;
+    }
+  } else {
+    // Crear nuevo PLC
+    title.textContent = "Nuevo PLC";
+    document.getElementById("plc-form").reset();
+    document.getElementById("plc-port").value = "3200";
+    document.getElementById("plc-id").value = "";
+    currentEditingPLC = null;
+  }
+
+  modal.style.display = "flex";
+}
+
+// Editar PLC
+function editPLC(plcId) {
+  openPLCModal(plcId);
+}
+
+// Eliminar PLC
+function deletePLC(plcId, plcName) {
+  document.getElementById("delete-plc-id").value = plcId;
+  document.getElementById("delete-plc-name").textContent = plcName;
+  document.getElementById("delete-plc-modal").style.display = "flex";
+}
+
+// Guardar PLC
+async function savePLC() {
+  const form = document.getElementById("plc-form");
+  const plcId = document.getElementById("plc-id").value;
+  const name = document.getElementById("plc-name").value;
+  const ip = document.getElementById("plc-ip").value;
+  const port = document.getElementById("plc-port").value;
+  const type = document.getElementById("plc-type").value;
+  const description = document.getElementById("plc-description").value;
+
+  // Validar formulario
+  if (!name || !ip || !port || !type) {
+    showNotification(
+      "Por favor complete todos los campos obligatorios.",
+      "error"
+    );
+    return;
+  }
+
+  try {
+    const plcData = {
+      plc_id: plcId || `PLC-${Date.now()}`,
+      name: name,
+      ip_address: ip,
+      port: parseInt(port),
+      type: type,
+      description: description,
+    };
+
+    // Enviar datos a la API
+    const response = await fetch(`${API_BASE_URL}/plcs`, {
+      method: currentEditingPLC ? "PUT" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(plcData),
+    });
+
+    if (response.ok) {
+      if (currentEditingPLC) {
+        showNotification(`PLC ${name} actualizado correctamente.`, "success");
+      } else {
+        showNotification(`PLC ${name} creado correctamente.`, "success");
+      }
+
+      // Cerrar modal
+      document.getElementById("plc-modal").style.display = "none";
+
+      // Recargar la lista de PLCs
+      loadPLCsData();
+    } else {
+      const errorData = await response.json();
+      showNotification(
+        `Error: ${errorData.error || "Error desconocido"}`,
+        "error"
+      );
+    }
+  } catch (error) {
+    console.error("Error guardando PLC:", error);
+    showNotification("Error guardando PLC", "error");
+  }
+}
+
+// Confirmar eliminación de PLC
+async function confirmDeletePLC() {
+  const plcId = document.getElementById("delete-plc-id").value;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/plcs/${plcId}`, {
+      method: "DELETE",
+    });
+
+    if (response.ok) {
+      showNotification(`PLC eliminado correctamente.`, "success");
+
+      // Cerrar modal
+      document.getElementById("delete-plc-modal").style.display = "none";
+
+      // Recargar la lista de PLCs
+      loadPLCsData();
+    } else {
+      const errorData = await response.json();
+      showNotification(
+        `Error: ${errorData.error || "Error eliminando PLC"}`,
+        "error"
+      );
+    }
+  } catch (error) {
+    console.error("Error eliminando PLC:", error);
+    showNotification("Error eliminando PLC", "error");
+  }
+}
+
+// Abrir modal de comando
+async function openCommandModal() {
+  // Cargar máquinas disponibles
+  try {
+    const response = await fetch(`${API_BASE_URL}/plcs`);
+    const plcs = await response.json();
+
+    const machineSelect = document.getElementById("command-plc");
+    machineSelect.innerHTML =
+      '<option value="">Seleccionar máquina...</option>';
+
+    if (plcs && plcs.length > 0) {
+      plcs.forEach((plc) => {
+        const option = document.createElement("option");
+        option.value = plc.plc_id || plc.id;
+        option.textContent = `${plc.name || plc.plc_id} (${
+          plc.ip_address || "N/A"
+        })`;
+        machineSelect.appendChild(option);
+      });
+    }
+  } catch (error) {
+    console.error("Error cargando PLCs para comandos:", error);
+    showNotification("Error cargando lista de PLCs", "error");
+  }
 
   // Mostrar modal
   document.getElementById("command-modal").style.display = "flex";
 }
 
 // Enviar comando
-function sendCommand() {
+async function sendCommand() {
   const command = document.getElementById("command-select").value;
-  const machine = document.getElementById("machine-select").value;
+  const machine = document.getElementById("command-plc").value;
 
   if (!command || !machine) {
     showNotification("Por favor seleccione un comando y una máquina.", "error");
@@ -715,36 +771,202 @@ function sendCommand() {
     }
   }
 
-  showNotification(`Comando ${command} enviado a ${machine}.`, "success");
-  document.getElementById("command-modal").style.display = "none";
+  try {
+    // En una implementación real, esto enviaría el comando al PLC
+    // Por ahora, solo simulamos el envío
+    showNotification(`Comando ${command} enviado a ${machine}.`, "success");
 
-  // Actualizar la tabla de comandos
-  setTimeout(() => {
-    loadCommandsData();
-  }, 1000);
+    // Cerrar modal
+    document.getElementById("command-modal").style.display = "none";
+
+    // Recargar la lista de comandos
+    setTimeout(() => {
+      loadCommandsData();
+    }, 1000);
+  } catch (error) {
+    console.error("Error enviando comando:", error);
+    showNotification("Error enviando comando", "error");
+  }
 }
 
 // Guardar configuración
-function saveConfig() {
-  const bindAddress = document.getElementById("bind-address").value;
-  const bindPort = document.getElementById("bind-port").value;
-  const scanInterval = document.getElementById("scan-interval").value;
-  const logLevel = document.getElementById("log-level").value;
+async function saveConfig() {
+  try {
+    const bindAddress = document.getElementById("bind-address").value;
+    const bindPort = document.getElementById("bind-port").value;
+    const plcPort = document.getElementById("plc-port").value;
+    const scanInterval = document.getElementById("scan-interval").value;
+    const logLevel = document.getElementById("log-level").value;
+    const wmsEndpoint = document.getElementById("wms-endpoint").value;
 
-  // Validar datos
-  if (!bindAddress || !bindPort || !scanInterval) {
-    showNotification("Por favor complete todos los campos.", "error");
-    return;
+    // Validar datos
+    if (!bindAddress || !bindPort || !plcPort || !scanInterval) {
+      showNotification(
+        "Por favor complete todos los campos obligatorios.",
+        "error"
+      );
+      return;
+    }
+
+    // Guardar cada configuración individualmente
+    const configs = [
+      {
+        key: "bind_address",
+        value: bindAddress,
+        description: "Dirección IP de escucha",
+      },
+      { key: "bind_port", value: bindPort, description: "Puerto de escucha" },
+      { key: "plc_port", value: plcPort, description: "Puerto PLC" },
+      {
+        key: "scan_interval",
+        value: scanInterval,
+        description: "Intervalo de escaneo",
+      },
+      { key: "log_level", value: logLevel, description: "Nivel de log" },
+      { key: "wms_endpoint", value: wmsEndpoint, description: "Endpoint WMS" },
+    ];
+
+    // Enviar cada configuración a la API
+    let success = true;
+    for (const config of configs) {
+      const response = await fetch(`${API_BASE_URL}/config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(config),
+      });
+
+      if (!response.ok) {
+        success = false;
+        const errorData = await response.json();
+        showNotification(
+          `Error guardando configuración ${config.key}: ${
+            errorData.error || "Error desconocido"
+          }`,
+          "error"
+        );
+        break;
+      }
+    }
+
+    if (success) {
+      showNotification("Configuración guardada exitosamente.", "success");
+    }
+  } catch (error) {
+    console.error("Error guardando configuración:", error);
+    showNotification("Error guardando configuración", "error");
   }
+}
 
-  // Simular guardado
-  showNotification("Configuración guardada exitosamente.", "success");
+// Configurar eventos
+function setupEventListeners() {
+  // Botones de navegación
+  document
+    .getElementById("refresh-status")
+    .addEventListener("click", function () {
+      showNotification("Actualizando estado del sistema...", "info");
+      loadDashboardData();
+    });
 
-  // En una implementación real, aquí se enviaría la configuración al servidor
-  console.log("Configuración guardada:", {
-    bindAddress,
-    bindPort,
-    scanInterval,
-    logLevel,
+  document
+    .getElementById("refresh-plcs")
+    .addEventListener("click", function () {
+      showNotification("Actualizando lista de PLCs...", "info");
+      loadPLCsData();
+    });
+
+  document
+    .getElementById("refresh-commands")
+    .addEventListener("click", function () {
+      showNotification("Actualizando lista de comandos...", "info");
+      loadCommandsData();
+    });
+
+  document
+    .getElementById("refresh-events")
+    .addEventListener("click", function () {
+      showNotification("Actualizando lista de eventos...", "info");
+      loadEventsData();
+    });
+
+  // Botones de PLC
+  document.getElementById("add-plc-btn").addEventListener("click", function () {
+    openPLCModal();
+  });
+
+  document
+    .getElementById("save-plc-btn")
+    .addEventListener("click", function () {
+      savePLC();
+    });
+
+  document
+    .getElementById("confirm-delete-plc")
+    .addEventListener("click", function () {
+      confirmDeletePLC();
+    });
+
+  // Botones de comando
+  document
+    .getElementById("send-command-btn")
+    .addEventListener("click", function () {
+      openCommandModal();
+    });
+
+  document
+    .getElementById("send-command-submit")
+    .addEventListener("click", function () {
+      sendCommand();
+    });
+
+  // Cambio en el selector de comando
+  document
+    .getElementById("command-select")
+    .addEventListener("change", function () {
+      const positionGroup = document.getElementById("position-group");
+      if (this.value === "MOVE") {
+        positionGroup.style.display = "block";
+      } else {
+        positionGroup.style.display = "none";
+      }
+    });
+
+  // Formulario de configuración
+  document
+    .getElementById("config-form")
+    .addEventListener("submit", function (e) {
+      e.preventDefault();
+      saveConfig();
+    });
+
+  document
+    .getElementById("reset-config")
+    .addEventListener("click", function () {
+      if (confirm("¿Está seguro que desea restablecer la configuración?")) {
+        loadConfigData();
+        showNotification("Configuración restablecida.", "info");
+      }
+    });
+
+  // Cerrar modales
+  const closeButtons = document.querySelectorAll(".close, .close-modal");
+  closeButtons.forEach((button) => {
+    button.addEventListener("click", function () {
+      const modal = this.closest(".modal");
+      if (modal) {
+        modal.style.display = "none";
+      }
+    });
+  });
+
+  // Cerrar modales al hacer clic fuera
+  const modals = document.querySelectorAll(".modal");
+  modals.forEach((modal) => {
+    modal.addEventListener("click", function (e) {
+      if (e.target === this) {
+        this.style.display = "none";
+      }
+    });
   });
 }

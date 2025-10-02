@@ -20,39 +20,50 @@ class APIAdapter:
         """Obtiene el estado de un PLC o todos los PLCs"""
         if machine_id:
             # Obtener estado de un PLC específico
-            return self.gateway_core.get_plc_status(machine_id)
-        else:
-            # Obtener estado de todos los PLCs
-            all_status = {}
-            for plc_id in self.gateway_core.plcs.keys():
-                all_status[plc_id] = self.gateway_core.get_plc_status(plc_id)
+            status = self.gateway_core.get_status()
+            plc_status = status.get("plcs", {}).get(machine_id, {})
             return {
                 "success": True,
-                "data": all_status
+                "data": {machine_id: plc_status}
+            }
+        else:
+            # Obtener estado de todos los PLCs
+            status = self.gateway_core.get_status()
+            return {
+                "success": True,
+                "data": status.get("plcs", {})
             }
 
     def send_command(self, command: int, argument: Optional[int] = None,
                      machine_id: Optional[str] = None) -> Dict[str, Any]:
         """Envía un comando a un PLC"""
+        # Mapear comandos numéricos a comandos de texto
+        command_map = {
+            0: "STATUS",
+            1: "MOVE",
+            2: "START",
+            3: "STOP",
+            4: "RESET"
+        }
+
+        command_name = command_map.get(command, "STATUS")
+
         if machine_id:
             # Enviar comando a un PLC específico
-            return self.gateway_core.send_plc_command(machine_id, command, argument)
+            return self.gateway_core.send_command(command_name, argument, machine_id)
         else:
-            # Enviar comando al primer PLC disponible
-            if self.gateway_core.plcs:
-                first_plc_id = list(self.gateway_core.plcs.keys())[0]
-                return self.gateway_core.send_plc_command(first_plc_id, command, argument)
-            else:
-                return {"error": "No hay PLCs disponibles", "success": False}
+            # Enviar comando a todos los PLCs
+            return self.gateway_core.send_command(command_name, argument)
 
     def get_machines(self) -> Dict[str, Any]:
         """Obtiene la lista de máquinas disponibles"""
+        status = self.gateway_core.get_status()
         plc_list = []
-        for plc_id, plc in self.gateway_core.plcs.items():
+        for plc_id, plc_info in status.get("plcs", {}).items():
             plc_list.append({
                 "id": plc_id,
                 "type": "PLC",
-                "status": "connected" if plc.is_connected() else "disconnected"
+                "status": "connected" if plc_info.get("connected", False) else "disconnected"
             })
 
         return {

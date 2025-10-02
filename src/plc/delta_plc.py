@@ -8,7 +8,7 @@ import socket
 import time
 import struct
 from typing import Dict, Any, Optional
-from interfaces.plc_interface import PLCInterface
+from src.interfaces.plc_interface import PLCInterface
 
 
 class DeltaPLC(PLCInterface):

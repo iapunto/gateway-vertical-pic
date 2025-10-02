@@ -10,25 +10,25 @@ import time
 from typing import Dict, Any, List, Optional
 
 # Corregir las importaciones
-from config.config_manager import ConfigManager
-from utils.logger import setup_logger, log_event
-from plc.plc_factory import PLCFactory
-from interfaces.plc_interface import PLCInterface
+from src.config.config_manager import ConfigManager
+from src.utils.logger import setup_logger, log_event
+from src.plc.plc_factory import PLCFactory
+from src.interfaces.plc_interface import PLCInterface
 
 # Importar el colector de métricas
-from monitoring import get_metrics_collector
+from src.monitoring import get_metrics_collector
 
 # Importar el gestor de eventos
-from events import get_event_manager, emit_event
+from src.events import get_event_manager, emit_event
 
 # Importar el cliente WMS
-from wms.wms_client import WMSClient
+from src.wms.wms_client import WMSClient
 
 # Importar el túnel reverso
-from wms.reverse_tunnel import ReverseTunnel
+from src.wms.reverse_tunnel import ReverseTunnel
 
 # Importar el gestor de base de datos
-from database import get_database_manager
+from src.database import get_database_manager
 
 
 class GatewayCore:
