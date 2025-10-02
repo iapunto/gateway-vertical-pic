@@ -4,7 +4,8 @@
 Punto de entrada principal para el Gateway Local
 """
 
-from src.core.gateway_core import GatewayCore
+# Corregir la importación
+from core.gateway_core import GatewayCore
 import sys
 import os
 import signal
