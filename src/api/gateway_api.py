@@ -4,6 +4,8 @@
 API REST para el Gateway Local
 """
 
+from monitoring import get_metrics_collector
+from health.health_checker import HealthChecker
 from adapters.api_adapter import APIAdapter
 from core.gateway_core import GatewayCore
 import sys
@@ -25,6 +27,8 @@ class GatewayAPI:
         self.app = Flask(__name__)
         self.gateway = GatewayCore(config_file)
         self.adapter = APIAdapter(self.gateway)
+        self.health_checker = HealthChecker(self.gateway)
+        self.metrics_collector = get_metrics_collector()
         self._setup_logging()
         self._setup_routes()
 
@@ -57,6 +61,12 @@ class GatewayAPI:
                               self.start_gateway, methods=['POST'])
         self.app.add_url_rule('/api/v1/stop', 'stop_gateway',
                               self.stop_gateway, methods=['POST'])
+
+        # Rutas de salud y métricas
+        self.app.add_url_rule('/health', 'health_check',
+                              self.health_check, methods=['GET'])
+        self.app.add_url_rule('/metrics', 'metrics',
+                              self.metrics, methods=['GET'])
 
     def get_status(self):
         """Obtiene el estado de todos los PLCs"""
@@ -143,6 +153,34 @@ class GatewayAPI:
         except Exception as e:
             self.app.logger.error(f"Error deteniendo gateway: {e}")
             return jsonify({"error": str(e), "success": False}), 500
+
+    def health_check(self):
+        """Endpoint de verificación de salud"""
+        try:
+            health_status = self.health_checker.get_health_status()
+            status_code = 200
+            if health_status['status'] == 'unhealthy':
+                status_code = 503
+            elif health_status['status'] == 'degraded':
+                status_code = 200  # Aún funcional pero con problemas
+
+            return jsonify(health_status), status_code
+        except Exception as e:
+            self.app.logger.error(f"Error en health check: {e}")
+            return jsonify({
+                "status": "error",
+                "message": str(e),
+                "timestamp": self.health_checker.get_health_status()['timestamp']
+            }), 500
+
+    def metrics(self):
+        """Endpoint de métricas para Prometheus"""
+        try:
+            metrics_text = self.metrics_collector.get_metrics_text()
+            return metrics_text, 200, {'Content-Type': 'text/plain; version=0.0.4; charset=utf-8'}
+        except Exception as e:
+            self.app.logger.error(f"Error obteniendo métricas: {e}")
+            return "Error obteniendo métricas", 500, {'Content-Type': 'text/plain'}
 
     def run(self, host: Optional[str] = None, port: Optional[int] = None, debug: bool = False) -> None:
         """Inicia el servidor Flask"""

@@ -19,6 +19,9 @@ gateway/
 │   ├── wms/               # Comunicación con WMS cloud
 │   ├── utils/             # Utilidades y herramientas
 │   ├── adapters/          # Adaptadores para compatibilidad
+│   ├── monitoring/        # Sistema de monitoreo y métricas
+│   ├── health/            # Sistema de verificación de salud
+│   ├── events/            # Sistema de gestión de eventos
 │   └── main.py            # Punto de entrada
 ├── tests/                 # Pruebas unitarias e integración
 ├── docs/                  # Documentación técnica
@@ -51,6 +54,7 @@ gateway/
 
 - **config_manager.py**: Gestor centralizado de configuración
 - Soporta configuración por archivos JSON
+- Validación de configuración
 
 ### WMS (`src/wms/`)
 
@@ -70,6 +74,22 @@ gateway/
 - **gateway_api.py**: API REST para control remoto del gateway
 - Permite controlar el gateway sin necesidad del WMS
 
+### Monitoreo (`src/monitoring/`)
+
+- **metrics_collector.py**: Colector de métricas del sistema
+- Integración con Prometheus
+- Métricas de rendimiento y negocio
+
+### Salud (`src/health/`)
+
+- **health_checker.py**: Verificador de salud del sistema
+- Checks de conectividad, recursos y estado general
+
+### Eventos (`src/events/`)
+
+- **event_manager.py**: Sistema de gestión de eventos
+- Notificaciones y callbacks asíncronos
+
 ## Extensibilidad
 
 Para añadir soporte para un nuevo tipo de PLC:
@@ -84,6 +104,7 @@ Para añadir soporte para un nuevo tipo de PLC:
 ### Configuración del entorno
 
 1. Crear entorno virtual:
+
    ```bash
    python -m venv venv
    source venv/Scripts/activate  # En Windows
@@ -98,18 +119,21 @@ Para añadir soporte para un nuevo tipo de PLC:
 ### Ejecución
 
 #### Modo standalone (sin API):
+
 ```bash
 cd src
 python main.py
 ```
 
 #### Modo con API REST:
+
 ```bash
 cd src
 python main.py --api --host 0.0.0.0 --port 8080
 ```
 
 O usando los scripts proporcionados:
+
 ```bash
 # En Windows
 start_api.bat
@@ -121,15 +145,25 @@ start_api.bat
 ### Pruebas
 
 Ejecutar todas las pruebas:
+
 ```bash
 python run_tests.py
 ```
 
 Ejecutar pruebas específicas:
+
 ```bash
 python run_tests.py --unit
 python run_tests.py --integration
 python run_tests.py --plc
+```
+
+### Demostración
+
+Ejecutar script de demostración:
+
+```bash
+python demo.py
 ```
 
 ### API REST
@@ -137,10 +171,13 @@ python run_tests.py --plc
 La API REST permite controlar el gateway de forma remota. Consulta [docs/API_REST.md](docs/API_REST.md) para más detalles.
 
 #### Endpoints principales:
+
 - `GET /api/v1/status` - Obtener estado de todos los PLCs
 - `GET /api/v1/status/{machine_id}` - Obtener estado de un PLC específico
 - `POST /api/v1/move/{position}` - Mover carrusel a una posición
 - `POST /api/v1/command` - Enviar comando personalizado
+- `GET /health` - Verificar salud del sistema
+- `GET /metrics` - Obtener métricas del sistema
 
 ### Simulador de PLC
 
@@ -150,6 +187,32 @@ Para pruebas locales sin hardware real, se incluye un simulador de PLC:
 cd src/plc
 python plc_simulator.py
 ```
+
+## Características Avanzadas
+
+### Sistema de Métricas
+
+- Integración con Prometheus
+- Métricas de rendimiento y negocio
+- Endpoint `/metrics` para scraping
+
+### Sistema de Salud
+
+- Verificación continua del estado del sistema
+- Endpoint `/health` para monitoreo
+- Diferentes niveles de salud (healthy, degraded, unhealthy)
+
+### Sistema de Eventos
+
+- Notificaciones asíncronas de eventos del sistema
+- Suscripción a eventos específicos
+- Extensible para nuevas funcionalidades
+
+### Validación de Configuración
+
+- Validación automática de configuración
+- Detección de errores de configuración
+- Feedback detallado de problemas
 
 ## Comandos PLC
 

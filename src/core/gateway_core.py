@@ -15,6 +15,12 @@ from utils.logger import setup_logger
 from plc.plc_factory import PLCFactory
 from interfaces.plc_interface import PLCInterface
 
+# Importar el colector de métricas
+from monitoring import get_metrics_collector
+
+# Importar el gestor de eventos
+from events import get_event_manager, emit_event
+
 
 class GatewayCore:
     """Clase principal del Gateway Local"""
@@ -26,6 +32,12 @@ class GatewayCore:
         self.plcs: Dict[str, PLCInterface] = {}
         self.running = False
         self.threads: List[threading.Thread] = []
+
+        # Inicializar colector de métricas
+        self.metrics_collector = get_metrics_collector()
+
+        # Inicializar gestor de eventos
+        self.event_manager = get_event_manager()
 
         # Configuración
         heartbeat_interval = self.config_manager.get(
@@ -60,13 +72,28 @@ class GatewayCore:
                     self.plcs[plc_id] = plc
                     self.logger.info(
                         f"PLC {plc_id} ({plc_type}) inicializado: {ip}:{port}")
+
+                    # Emitir evento de inicialización de PLC
+                    emit_event("plc.initialized", {
+                        "plc_id": plc_id,
+                        "type": plc_type,
+                        "ip": ip,
+                        "port": port
+                    }, "gateway_core")
                 except Exception as e:
                     self.logger.error(f"Error inicializando PLC {plc_id}: {e}")
+                    emit_event("plc.initialization_error", {
+                        "plc_id": plc_id,
+                        "error": str(e)
+                    }, "gateway_core")
                     return False
 
             return True
         except Exception as e:
             self.logger.error(f"Error inicializando PLCs: {e}")
+            emit_event("gateway.initialization_error", {
+                "error": str(e)
+            }, "gateway_core")
             return False
 
     def connect_plcs(self) -> bool:
@@ -76,17 +103,46 @@ class GatewayCore:
             try:
                 if plc.connect():
                     self.logger.info(f"PLC {plc_id} conectado exitosamente")
+                    self.metrics_collector.record_plc_connection(plc_id, True)
                     success_count += 1
+
+                    # Obtener IP del PLC si está disponible
+                    plc_ip = getattr(plc, 'ip', 'unknown')
+                    # Emitir evento de conexión exitosa
+                    emit_event("plc.connected", {
+                        "plc_id": plc_id,
+                        "ip": plc_ip
+                    }, "gateway_core")
                 else:
                     self.logger.error(f"Error conectando PLC {plc_id}")
+                    self.metrics_collector.record_connection_error(plc_id)
+
+                    # Emitir evento de error de conexión
+                    emit_event("plc.connection_error", {
+                        "plc_id": plc_id,
+                        "error": "Connection failed"
+                    }, "gateway_core")
             except Exception as e:
                 self.logger.error(f"Excepción conectando PLC {plc_id}: {e}")
+                self.metrics_collector.record_connection_error(plc_id)
+
+                # Emitir evento de excepción de conexión
+                emit_event("plc.connection_exception", {
+                    "plc_id": plc_id,
+                    "error": str(e)
+                }, "gateway_core")
 
         return success_count == len(self.plcs)
 
     def start(self) -> bool:
         """Inicia el Gateway Local"""
         self.logger.info("Iniciando Gateway Local...")
+
+        # Iniciar gestor de eventos
+        self.event_manager.start()
+
+        # Iniciar colector de métricas
+        self.metrics_collector.start()
 
         # Inicializar PLCs
         if not self.initialize_plcs():
@@ -104,6 +160,11 @@ class GatewayCore:
         self._start_heartbeat_thread()
         self._start_monitoring_thread()
 
+        # Emitir evento de inicio del gateway
+        emit_event("gateway.started", {
+            "plc_count": len(self.plcs)
+        }, "gateway_core")
+
         self.logger.info("Gateway Local iniciado exitosamente")
         return True
 
@@ -112,11 +173,26 @@ class GatewayCore:
         self.logger.info("Deteniendo Gateway Local...")
         self.running = False
 
+        # Emitir evento de detención del gateway
+        emit_event("gateway.stopping", {}, "gateway_core")
+
+        # Detener colector de métricas
+        self.metrics_collector.stop()
+
+        # Detener gestor de eventos
+        self.event_manager.stop()
+
         # Desconectar todos los PLCs
         for plc_id, plc in self.plcs.items():
             try:
                 plc.disconnect()
                 self.logger.info(f"PLC {plc_id} desconectado")
+                self.metrics_collector.record_plc_connection(plc_id, False)
+
+                # Emitir evento de desconexión
+                emit_event("plc.disconnected", {
+                    "plc_id": plc_id
+                }, "gateway_core")
             except Exception as e:
                 self.logger.error(f"Error desconectando PLC {plc_id}: {e}")
 
@@ -168,11 +244,24 @@ class GatewayCore:
     def get_plc_status(self, plc_id: str) -> Dict[str, Any]:
         """Obtiene el estado de un PLC específico"""
         if plc_id not in self.plcs:
-            return {"error": f"PLC {plc_id} no encontrado", "success": False}
+            error_msg = f"PLC {plc_id} no encontrado"
+            emit_event("plc.not_found", {
+                "plc_id": plc_id,
+                "error": error_msg
+            }, "gateway_core")
+            return {"error": error_msg, "success": False}
 
         try:
             plc = self.plcs[plc_id]
             status = plc.get_status()
+
+            # Emitir evento de consulta de estado
+            emit_event("plc.status_queried", {
+                "plc_id": plc_id,
+                "connected": plc.is_connected(),
+                "status": status
+            }, "gateway_core")
+
             return {
                 "plc_id": plc_id,
                 "connected": plc.is_connected(),
@@ -181,20 +270,53 @@ class GatewayCore:
             }
         except Exception as e:
             self.logger.error(f"Error obteniendo estado de PLC {plc_id}: {e}")
+            emit_event("plc.status_error", {
+                "plc_id": plc_id,
+                "error": str(e)
+            }, "gateway_core")
             return {"error": str(e), "success": False}
 
     def send_plc_command(self, plc_id: str, command: int, argument: Optional[int] = None) -> Dict[str, Any]:
         """Envía un comando a un PLC específico"""
         if plc_id not in self.plcs:
-            return {"error": f"PLC {plc_id} no encontrado", "success": False}
+            error_msg = f"PLC {plc_id} no encontrado"
+            emit_event("plc.not_found", {
+                "plc_id": plc_id,
+                "error": error_msg
+            }, "gateway_core")
+            return {"error": error_msg, "success": False}
 
+        start_time = time.time()
         try:
             plc = self.plcs[plc_id]
             if not plc.is_connected():
                 if not plc.connect():
-                    return {"error": "No se pudo conectar al PLC", "success": False}
+                    error_msg = "No se pudo conectar al PLC"
+                    emit_event("plc.connection_failed", {
+                        "plc_id": plc_id,
+                        "error": error_msg
+                    }, "gateway_core")
+                    return {"error": error_msg, "success": False}
 
             result = plc.send_command(command, argument)
+
+            # Registrar métricas
+            duration = time.time() - start_time
+            self.metrics_collector.record_command(plc_id, command, duration)
+
+            # Si es un comando de movimiento, registrar el cambio de posición
+            if command == 1 and argument is not None:  # MUEVETE
+                self.metrics_collector.record_position_change(plc_id, argument)
+
+            # Emitir evento de comando enviado
+            emit_event("plc.command_sent", {
+                "plc_id": plc_id,
+                "command": command,
+                "argument": argument,
+                "result": result,
+                "duration": duration
+            }, "gateway_core")
+
             return {
                 "plc_id": plc_id,
                 "command": command,
@@ -204,4 +326,10 @@ class GatewayCore:
             }
         except Exception as e:
             self.logger.error(f"Error enviando comando a PLC {plc_id}: {e}")
+            emit_event("plc.command_error", {
+                "plc_id": plc_id,
+                "command": command,
+                "argument": argument,
+                "error": str(e)
+            }, "gateway_core")
             return {"error": str(e), "success": False}

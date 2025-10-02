@@ -49,6 +49,11 @@ class ConfigManager:
                 "max_size": 10485760,  # 10MB
                 "backup_count": 5
             },
+            "monitoring": {
+                "enabled": True,
+                "metrics_port": 8081,
+                "health_check_interval": 30
+            },
             "plcs": [
                 # Ejemplo de configuración de PLCs
                 # {
@@ -136,3 +141,67 @@ class ConfigManager:
                 del self.config["plcs"][i]
                 return True
         return False
+
+    def update_plc(self, plc_id: str, plc_config: Dict[str, Any]) -> bool:
+        """Actualiza la configuración de un PLC"""
+        if "plcs" not in self.config:
+            return False
+
+        for i, plc in enumerate(self.config["plcs"]):
+            if plc.get("id") == plc_id:
+                self.config["plcs"][i] = plc_config
+                return True
+        return False
+
+    def validate_config(self) -> tuple[bool, list]:
+        """Valida la configuración actual"""
+        errors = []
+
+        # Validar configuración de gateway
+        gateway_config = self.config.get("gateway", {})
+        if not gateway_config.get("id"):
+            errors.append("Gateway ID is required")
+        if not gateway_config.get("name"):
+            errors.append("Gateway name is required")
+
+        # Validar configuración de red
+        network_config = self.config.get("network", {})
+        bind_address = network_config.get("bind_address")
+        if bind_address and not self._is_valid_ip(bind_address) and bind_address != "0.0.0.0":
+            errors.append(f"Invalid bind address: {bind_address}")
+
+        bind_port = network_config.get("bind_port")
+        if bind_port and (not isinstance(bind_port, int) or bind_port < 1 or bind_port > 65535):
+            errors.append(f"Invalid bind port: {bind_port}")
+
+        # Validar configuración de PLCs
+        plcs = self.config.get("plcs", [])
+        for i, plc in enumerate(plcs):
+            if not plc.get("id"):
+                errors.append(f"PLC {i}: ID is required")
+            if not plc.get("ip"):
+                errors.append(f"PLC {plc.get('id', i)}: IP is required")
+            if not self._is_valid_ip(plc.get("ip", "")):
+                errors.append(f"PLC {plc.get('id', i)}: Invalid IP address")
+
+        is_valid = len(errors) == 0
+        return is_valid, errors
+
+    def _is_valid_ip(self, ip: str) -> bool:
+        """Valida si una cadena es una dirección IP válida"""
+        if not ip:
+            return False
+
+        parts = ip.split(".")
+        if len(parts) != 4:
+            return False
+
+        for part in parts:
+            try:
+                num = int(part)
+                if num < 0 or num > 255:
+                    return False
+            except ValueError:
+                return False
+
+        return True

@@ -174,6 +174,60 @@ POST /api/v1/stop
 }
 ```
 
+### Verificación de salud del sistema
+
+```
+GET /health
+```
+
+**Respuesta:**
+
+```json
+{
+  "status": "healthy",
+  "timestamp": "2023-01-01T12:00:00Z",
+  "checks": [
+    {
+      "name": "Gateway Status",
+      "status": "healthy",
+      "message": "Gateway is running",
+      "timestamp": "2023-01-01T12:00:00Z"
+    },
+    {
+      "name": "PLC Connections",
+      "status": "healthy",
+      "message": "2/2 PLCs connected",
+      "details": {
+        "connected": 2,
+        "total": 2
+      },
+      "timestamp": "2023-01-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+### Métricas del sistema (Prometheus)
+
+```
+GET /metrics
+```
+
+**Respuesta:**
+
+```
+# TYPE gateway_status gauge
+gateway_status 1.0
+# TYPE plc_connections gauge
+plc_connections 2.0
+# TYPE commands_sent counter
+commands_sent{plc_id="PLC-001",command="1"} 5.0
+# TYPE position_changes counter
+position_changes{plc_id="PLC-001"} 5.0
+# TYPE current_positions gauge
+current_positions{plc_id="PLC-001"} 3.0
+```
+
 ## Códigos de comando
 
 - **0**: STATUS - Obtiene el estado actual del PLC
@@ -199,4 +253,16 @@ curl -X POST http://localhost:8080/api/v1/move/3
 curl -X POST http://localhost:8080/api/v1/command \
   -H "Content-Type: application/json" \
   -d '{"command": 1, "argument": 5, "machine_id": "PLC-001"}'
+```
+
+### Verificar salud del sistema
+
+```bash
+curl http://localhost:8080/health
+```
+
+### Obtener métricas
+
+```bash
+curl http://localhost:8080/metrics
 ```
