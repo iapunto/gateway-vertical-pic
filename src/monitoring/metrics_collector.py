@@ -7,35 +7,53 @@ Colector de métricas para el Gateway Local
 import time
 import threading
 from typing import Dict, Any, List, Optional
-from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST, CollectorRegistry, REGISTRY
 import json
 
 
 class MetricsCollector:
     """Colector de métricas para el Gateway Local"""
 
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(MetricsCollector, cls).__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
+
     def __init__(self):
+        if self._initialized:
+            return
+
+        # Crear un registro personalizado para evitar conflictos
+        self.registry = CollectorRegistry()
+
         # Métricas de sistema
         self.gateway_status = Gauge(
-            'gateway_status', 'Estado del Gateway (1=running, 0=stopped)')
+            'gateway_status', 'Estado del Gateway (1=running, 0=stopped)', registry=self.registry)
         self.plc_connections = Gauge(
-            'plc_connections', 'Número de conexiones PLC activas')
+            'plc_connections', 'Número de conexiones PLC activas', registry=self.registry)
         self.plc_connection_errors = Counter(
-            'plc_connection_errors', 'Número de errores de conexión a PLCs')
+            'plc_connection_errors', 'Número de errores de conexión a PLCs', registry=self.registry)
         self.commands_sent = Counter(
-            'commands_sent', 'Número de comandos enviados', ['plc_id', 'command'])
+            'commands_sent', 'Número de comandos enviados', ['plc_id', 'command'], registry=self.registry)
         self.command_duration = Histogram(
-            'command_duration', 'Duración de comandos enviados', ['plc_id'])
+            'command_duration', 'Duración de comandos enviados', ['plc_id'], registry=self.registry)
 
         # Métricas de negocio
         self.position_changes = Counter(
-            'position_changes', 'Número de cambios de posición', ['plc_id'])
+            'position_changes', 'Número de cambios de posición', ['plc_id'], registry=self.registry)
         self.current_positions = Gauge(
-            'current_positions', 'Posición actual de cada PLC', ['plc_id'])
+            'current_positions', 'Posición actual de cada PLC', ['plc_id'], registry=self.registry)
 
         # Estado interno
         self.running = False
         self.metrics_thread = None
+        self._initialized = True
 
     def start(self) -> None:
         """Inicia el colector de métricas"""
@@ -88,7 +106,7 @@ class MetricsCollector:
 
     def get_metrics_text(self) -> str:
         """Obtiene las métricas en formato texto para Prometheus"""
-        return generate_latest().decode('utf-8')
+        return generate_latest(self.registry).decode('utf-8')
 
     def get_metrics_json(self) -> Dict[str, Any]:
         """Obtiene las métricas en formato JSON"""
@@ -103,10 +121,6 @@ class MetricsCollector:
         }
 
 
-# Instancia global del colector de métricas
-metrics_collector = MetricsCollector()
-
-
 def get_metrics_collector() -> MetricsCollector:
     """Obtiene la instancia global del colector de métricas"""
-    return metrics_collector
+    return MetricsCollector()

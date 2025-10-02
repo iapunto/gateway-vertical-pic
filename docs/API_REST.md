@@ -8,7 +8,7 @@ La API REST del Gateway Local permite controlar y monitorear el gateway de forma
 
 ### Obtener estado de todos los PLCs
 
-```
+```http
 GET /api/v1/status
 ```
 
@@ -34,7 +34,7 @@ GET /api/v1/status
 
 ### Obtener estado de un PLC específico
 
-```
+```http
 GET /api/v1/status/{machine_id}
 ```
 
@@ -59,7 +59,7 @@ GET /api/v1/status/{machine_id}
 
 ### Obtener lista de máquinas disponibles
 
-```
+```http
 GET /api/v1/machines
 ```
 
@@ -80,7 +80,7 @@ GET /api/v1/machines
 
 ### Enviar comando a un PLC
 
-```
+```http
 POST /api/v1/command
 ```
 
@@ -112,7 +112,7 @@ POST /api/v1/command
 
 ### Mover carrusel a una posición
 
-```
+```http
 POST /api/v1/move/{position}
 ```
 
@@ -146,7 +146,7 @@ POST /api/v1/move/{position}
 
 ### Iniciar el gateway
 
-```
+```http
 POST /api/v1/start
 ```
 
@@ -161,7 +161,7 @@ POST /api/v1/start
 
 ### Detener el gateway
 
-```
+```http
 POST /api/v1/stop
 ```
 
@@ -176,7 +176,7 @@ POST /api/v1/stop
 
 ### Verificación de salud del sistema
 
-```
+```http
 GET /health
 ```
 
@@ -209,13 +209,13 @@ GET /health
 
 ### Métricas del sistema (Prometheus)
 
-```
+```http
 GET /metrics
 ```
 
 **Respuesta:**
 
-```
+```python
 # TYPE gateway_status gauge
 gateway_status 1.0
 # TYPE plc_connections gauge

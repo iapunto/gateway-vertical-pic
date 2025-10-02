@@ -11,7 +11,7 @@ from typing import Dict, Any, List, Optional
 
 # Corregir las importaciones
 from config.config_manager import ConfigManager
-from utils.logger import setup_logger
+from utils.logger import setup_logger, log_event
 from plc.plc_factory import PLCFactory
 from interfaces.plc_interface import PLCInterface
 
@@ -20,6 +20,15 @@ from monitoring import get_metrics_collector
 
 # Importar el gestor de eventos
 from events import get_event_manager, emit_event
+
+# Importar el cliente WMS
+from wms.wms_client import WMSClient
+
+# Importar el túnel reverso
+from wms.reverse_tunnel import ReverseTunnel
+
+# Importar el gestor de base de datos
+from database import get_database_manager
 
 
 class GatewayCore:
@@ -39,6 +48,30 @@ class GatewayCore:
         # Inicializar gestor de eventos
         self.event_manager = get_event_manager()
 
+        # Inicializar base de datos
+        self.database_manager = get_database_manager()
+
+        # Inicializar cliente WMS
+        wms_config = self.config_manager.get("wms", {})
+        self.wms_client: Optional[WMSClient] = None
+        if wms_config and isinstance(wms_config, dict):
+            endpoint = wms_config.get("endpoint")
+            auth_token = wms_config.get("auth_token")
+            if endpoint and auth_token and isinstance(endpoint, str) and isinstance(auth_token, str):
+                self.wms_client = WMSClient(endpoint, auth_token)
+
+        # Inicializar túnel reverso
+        self.reverse_tunnel: Optional[ReverseTunnel] = None
+        if wms_config and isinstance(wms_config, dict):
+            endpoint = wms_config.get("endpoint")
+            auth_token = wms_config.get("auth_token")
+            gateway_id = self.config_manager.get("gateway.id", "unknown")
+            if endpoint and auth_token and isinstance(gateway_id, str):
+                self.reverse_tunnel = ReverseTunnel(
+                    endpoint, auth_token, gateway_id)
+                self.reverse_tunnel.set_command_callback(
+                    self._handle_wms_command)
+
         # Configuración
         heartbeat_interval = self.config_manager.get(
             "wms.heartbeat_interval", 60)
@@ -49,6 +82,8 @@ class GatewayCore:
             self.heartbeat_interval = 60
 
         self.logger.info("Gateway Local inicializado")
+        log_event(self.logger, "gateway.initialized",
+                  "Gateway Local inicializado")
 
     def initialize_plcs(self) -> bool:
         """Inicializa todos los PLCs configurados"""
@@ -61,6 +96,8 @@ class GatewayCore:
                 plc_type = plc_config.get("type", "delta")
                 ip = plc_config.get("ip")
                 port = plc_config.get("port", 3200)
+                name = plc_config.get("name", f"PLC {plc_id}")
+                description = plc_config.get("description", "")
 
                 if not all([plc_id, ip]):
                     self.logger.warning(
@@ -70,6 +107,17 @@ class GatewayCore:
                 try:
                     plc = PLCFactory.create_plc(plc_type, ip, port)
                     self.plcs[plc_id] = plc
+
+                    # Guardar PLC en la base de datos
+                    self.database_manager.add_plc(
+                        plc_id=plc_id,
+                        name=name,
+                        ip_address=ip,
+                        port=port,
+                        plc_type=plc_type,
+                        description=description
+                    )
+
                     self.logger.info(
                         f"PLC {plc_id} ({plc_type}) inicializado: {ip}:{port}")
 
@@ -113,6 +161,13 @@ class GatewayCore:
                         "plc_id": plc_id,
                         "ip": plc_ip
                     }, "gateway_core")
+
+                    # Registrar evento en la base de datos
+                    self.database_manager.add_event(
+                        event_type="plc.connected",
+                        source="gateway_core",
+                        data={"plc_id": plc_id, "ip": plc_ip}
+                    )
                 else:
                     self.logger.error(f"Error conectando PLC {plc_id}")
                     self.metrics_collector.record_connection_error(plc_id)
@@ -122,6 +177,13 @@ class GatewayCore:
                         "plc_id": plc_id,
                         "error": "Connection failed"
                     }, "gateway_core")
+
+                    # Registrar evento en la base de datos
+                    self.database_manager.add_event(
+                        event_type="plc.connection_error",
+                        source="gateway_core",
+                        data={"plc_id": plc_id, "error": "Connection failed"}
+                    )
             except Exception as e:
                 self.logger.error(f"Excepción conectando PLC {plc_id}: {e}")
                 self.metrics_collector.record_connection_error(plc_id)
@@ -132,204 +194,446 @@ class GatewayCore:
                     "error": str(e)
                 }, "gateway_core")
 
+                # Registrar evento en la base de datos
+                self.database_manager.add_event(
+                    event_type="plc.connection_exception",
+                    source="gateway_core",
+                    data={"plc_id": plc_id, "error": str(e)}
+                )
         return success_count == len(self.plcs)
 
-    def start(self) -> bool:
-        """Inicia el Gateway Local"""
-        self.logger.info("Iniciando Gateway Local...")
-
-        # Iniciar gestor de eventos
-        self.event_manager.start()
-
-        # Iniciar colector de métricas
-        self.metrics_collector.start()
-
-        # Inicializar PLCs
-        if not self.initialize_plcs():
-            self.logger.error("Error inicializando PLCs")
-            return False
-
-        # Conectar PLCs
-        if not self.connect_plcs():
-            self.logger.error("Error conectando PLCs")
-            return False
-
-        self.running = True
-
-        # Iniciar hilos de trabajo
-        self._start_heartbeat_thread()
-        self._start_monitoring_thread()
-
-        # Emitir evento de inicio del gateway
-        emit_event("gateway.started", {
-            "plc_count": len(self.plcs)
-        }, "gateway_core")
-
-        self.logger.info("Gateway Local iniciado exitosamente")
-        return True
-
-    def stop(self) -> None:
-        """Detiene el Gateway Local"""
-        self.logger.info("Deteniendo Gateway Local...")
-        self.running = False
-
-        # Emitir evento de detención del gateway
-        emit_event("gateway.stopping", {}, "gateway_core")
-
-        # Detener colector de métricas
-        self.metrics_collector.stop()
-
-        # Detener gestor de eventos
-        self.event_manager.stop()
-
-        # Desconectar todos los PLCs
+    def disconnect_plcs(self) -> None:
+        """Desconecta todos los PLCs"""
         for plc_id, plc in self.plcs.items():
             try:
                 plc.disconnect()
                 self.logger.info(f"PLC {plc_id} desconectado")
-                self.metrics_collector.record_plc_connection(plc_id, False)
 
                 # Emitir evento de desconexión
                 emit_event("plc.disconnected", {
                     "plc_id": plc_id
                 }, "gateway_core")
+
+                # Registrar evento en la base de datos
+                self.database_manager.add_event(
+                    event_type="plc.disconnected",
+                    source="gateway_core",
+                    data={"plc_id": plc_id}
+                )
             except Exception as e:
                 self.logger.error(f"Error desconectando PLC {plc_id}: {e}")
 
-        # Esperar a que terminen los hilos
+                # Emitir evento de error de desconexión
+                emit_event("plc.disconnection_error", {
+                    "plc_id": plc_id,
+                    "error": str(e)
+                }, "gateway_core")
+
+                # Registrar evento en la base de datos
+                self.database_manager.add_event(
+                    event_type="plc.disconnection_error",
+                    source="gateway_core",
+                    data={"plc_id": plc_id, "error": str(e)}
+                )
+
+    def start(self) -> bool:
+        """Inicia el Gateway Local"""
+        if self.running:
+            self.logger.warning("Gateway ya está iniciado")
+            return True
+
+        try:
+            self.logger.info("Iniciando Gateway Local...")
+
+            # Inicializar PLCs
+            if not self.initialize_plcs():
+                self.logger.error("Error inicializando PLCs")
+                return False
+
+            # Conectar PLCs
+            if not self.connect_plcs():
+                self.logger.error("Error conectando PLCs")
+                return False
+
+            # Iniciar túnel reverso si está configurado
+            if self.reverse_tunnel:
+                self.reverse_tunnel.start()
+
+            # Iniciar hilos de monitoreo
+            self._start_monitoring_threads()
+
+            self.running = True
+            self.logger.info("Gateway Local iniciado exitosamente")
+
+            # Emitir evento de inicio
+            emit_event("gateway.started", {}, "gateway_core")
+
+            # Registrar evento en la base de datos
+            self.database_manager.add_event(
+                event_type="gateway.started",
+                source="gateway_core",
+                data={}
+            )
+
+            return True
+        except Exception as e:
+            self.logger.error(f"Error iniciando Gateway: {e}")
+
+            # Emitir evento de error de inicio
+            emit_event("gateway.start_error", {
+                "error": str(e)
+            }, "gateway_core")
+
+            # Registrar evento en la base de datos
+            self.database_manager.add_event(
+                event_type="gateway.start_error",
+                source="gateway_core",
+                data={"error": str(e)}
+            )
+
+            return False
+
+    def stop(self) -> None:
+        """Detiene el Gateway Local"""
+        if not self.running:
+            self.logger.warning("Gateway ya está detenido")
+            return
+
+        self.logger.info("Deteniendo Gateway Local...")
+        self.running = False
+
+        # Detener hilos
         for thread in self.threads:
             if thread.is_alive():
                 thread.join(timeout=5)
 
+        # Detener túnel reverso
+        if self.reverse_tunnel:
+            self.reverse_tunnel.stop()
+
+        # Desconectar PLCs
+        self.disconnect_plcs()
+
         self.logger.info("Gateway Local detenido")
 
-    def _start_heartbeat_thread(self) -> None:
-        """Inicia el hilo de heartbeat"""
+        # Emitir evento de detención
+        emit_event("gateway.stopped", {}, "gateway_core")
+
+        # Registrar evento en la base de datos
+        self.database_manager.add_event(
+            event_type="gateway.stopped",
+            source="gateway_core",
+            data={}
+        )
+
+    def _start_monitoring_threads(self) -> None:
+        """Inicia los hilos de monitoreo"""
+        # Hilo de heartbeat
         heartbeat_thread = threading.Thread(
             target=self._heartbeat_worker, daemon=True)
         heartbeat_thread.start()
         self.threads.append(heartbeat_thread)
-        self.logger.info("Hilo de heartbeat iniciado")
 
-    def _start_monitoring_thread(self) -> None:
-        """Inicia el hilo de monitoreo"""
-        monitoring_thread = threading.Thread(
-            target=self._monitoring_worker, daemon=True)
-        monitoring_thread.start()
-        self.threads.append(monitoring_thread)
-        self.logger.info("Hilo de monitoreo iniciado")
+        # Hilo de monitoreo de PLCs
+        plc_monitor_thread = threading.Thread(
+            target=self._plc_monitor_worker, daemon=True)
+        plc_monitor_thread.start()
+        self.threads.append(plc_monitor_thread)
 
     def _heartbeat_worker(self) -> None:
-        """Worker para enviar heartbeat"""
+        """Worker para enviar heartbeats al WMS"""
         while self.running:
             try:
-                # TODO: Implementar envío real de heartbeat al WMS
-                self.logger.debug("Enviando heartbeat...")
-                time.sleep(float(self.heartbeat_interval))
-            except Exception as e:
-                self.logger.error(f"Error en worker de heartbeat: {e}")
-                time.sleep(5.0)
+                if self.wms_client:
+                    status = self.get_status()
+                    self.wms_client.send_heartbeat(status)
 
-    def _monitoring_worker(self) -> None:
-        """Worker para monitoreo de PLCs"""
+                    # Registrar métrica
+                    self.metrics_collector.record_connection_error(
+                        "heartbeat")  # Usar método existente
+
+                    # Registrar evento en la base de datos
+                    self.database_manager.add_event(
+                        event_type="gateway.heartbeat",
+                        source="gateway_core",
+                        data={"status": status}
+                    )
+            except Exception as e:
+                self.logger.error(f"Error enviando heartbeat: {e}")
+
+                # Emitir evento de error de heartbeat
+                emit_event("gateway.heartbeat_error", {
+                    "error": str(e)
+                }, "gateway_core")
+
+                # Registrar evento en la base de datos
+                self.database_manager.add_event(
+                    event_type="gateway.heartbeat_error",
+                    source="gateway_core",
+                    data={"error": str(e)}
+                )
+
+            time.sleep(self.heartbeat_interval)
+
+    def _plc_monitor_worker(self) -> None:
+        """Worker para monitorear el estado de los PLCs"""
         while self.running:
             try:
-                # TODO: Implementar monitoreo real de PLCs
-                self.logger.debug("Monitoreando PLCs...")
-                time.sleep(10.0)
+                for plc_id, plc in self.plcs.items():
+                    if plc.is_connected():
+                        # Obtener estado del PLC
+                        status = plc.get_status()
+
+                        # Registrar métrica
+                        if "response_time" in status:
+                            self.metrics_collector.record_command(
+                                # Usar método existente
+                                plc_id, 0, status["response_time"])
+
+                        # Registrar comando en la base de datos
+                        self.database_manager.add_command(
+                            plc_id=plc_id,
+                            command=0,  # STATUS command
+                            result=status
+                        )
+
+                        # Emitir evento de estado de PLC
+                        emit_event("plc.status_update", {
+                            "plc_id": plc_id,
+                            "status": status
+                        }, "gateway_core")
+
+                        # Registrar evento en la base de datos
+                        self.database_manager.add_event(
+                            event_type="plc.status_update",
+                            source="gateway_core",
+                            data={"plc_id": plc_id, "status": status}
+                        )
             except Exception as e:
-                self.logger.error(f"Error en worker de monitoreo: {e}")
-                time.sleep(5.0)
+                self.logger.error(f"Error monitoreando PLCs: {e}")
 
-    def get_plc_status(self, plc_id: str) -> Dict[str, Any]:
-        """Obtiene el estado de un PLC específico"""
-        if plc_id not in self.plcs:
-            error_msg = f"PLC {plc_id} no encontrado"
-            emit_event("plc.not_found", {
-                "plc_id": plc_id,
-                "error": error_msg
-            }, "gateway_core")
-            return {"error": error_msg, "success": False}
+                # Emitir evento de error de monitoreo
+                emit_event("gateway.plc_monitor_error", {
+                    "error": str(e)
+                }, "gateway_core")
 
+                # Registrar evento en la base de datos
+                self.database_manager.add_event(
+                    event_type="gateway.plc_monitor_error",
+                    source="gateway_core",
+                    data={"error": str(e)}
+                )
+
+            time.sleep(10)  # Monitorear cada 10 segundos
+
+    def get_status(self) -> Dict[str, Any]:
+        """Obtiene el estado completo del gateway"""
+        plc_statuses = {}
+        for plc_id, plc in self.plcs.items():
+            try:
+                if plc.is_connected():
+                    status = plc.get_status()
+                    plc_statuses[plc_id] = {
+                        "connected": True,
+                        "status": status
+                    }
+                else:
+                    plc_statuses[plc_id] = {
+                        "connected": False,
+                        "error": "Not connected"
+                    }
+            except Exception as e:
+                plc_statuses[plc_id] = {
+                    "connected": False,
+                    "error": str(e)
+                }
+
+        return {
+            "gateway": {
+                "id": self.config_manager.get("gateway.id", "unknown"),
+                "name": self.config_manager.get("gateway.name", "Gateway Local"),
+                "version": self.config_manager.get("gateway.version", "1.0.0"),
+                "running": self.running
+            },
+            "plcs": plc_statuses,
+            "timestamp": time.time()
+        }
+
+    def send_command(self, command: str, argument: Optional[Any] = None,
+                     plc_id: Optional[str] = None) -> Dict[str, Any]:
+        """Envía un comando a uno o todos los PLCs"""
+        results = {}
+
+        # Determinar PLCs objetivo
+        target_plcs = []
+        if plc_id:
+            if plc_id in self.plcs:
+                target_plcs = [(plc_id, self.plcs[plc_id])]
+            else:
+                return {"success": False, "error": f"PLC {plc_id} no encontrado"}
+        else:
+            target_plcs = list(self.plcs.items())
+
+        # Enviar comando a cada PLC
+        for target_id, plc in target_plcs:
+            try:
+                if not plc.is_connected():
+                    results[target_id] = {
+                        "success": False,
+                        "error": "PLC no conectado"
+                    }
+                    continue
+
+                # Mapear comando a código numérico
+                command_map = {
+                    "STATUS": 0,
+                    "MOVE": 1,
+                    "START": 2,
+                    "STOP": 3,
+                    "RESET": 4
+                }
+
+                if command not in command_map:
+                    results[target_id] = {
+                        "success": False,
+                        "error": f"Comando {command} no soportado"
+                    }
+                    continue
+
+                command_code = command_map[command]
+
+                # Enviar comando
+                if argument is not None:
+                    result = plc.send_command(command_code, argument)
+                else:
+                    result = plc.send_command(command_code)
+
+                results[target_id] = result
+
+                # Registrar comando en la base de datos
+                self.database_manager.add_command(
+                    plc_id=target_id,
+                    command=command_code,
+                    argument=argument if isinstance(argument, int) else None,
+                    result=result,
+                    success=result.get("success", False)
+                )
+
+                # Registrar métrica
+                if "response_time" in result:
+                    self.metrics_collector.record_command(
+                        target_id, command_code, result["response_time"])
+
+                # Emitir evento de comando
+                emit_event("plc.command_sent", {
+                    "plc_id": target_id,
+                    "command": command,
+                    "argument": argument,
+                    "result": result
+                }, "gateway_core")
+
+                # Registrar evento en la base de datos
+                self.database_manager.add_event(
+                    event_type="plc.command_sent",
+                    source="gateway_core",
+                    data={
+                        "plc_id": target_id,
+                        "command": command,
+                        "argument": argument,
+                        "result": result
+                    }
+                )
+            except Exception as e:
+                error_msg = f"Error enviando comando {command} a PLC {target_id}: {e}"
+                self.logger.error(error_msg)
+                results[target_id] = {"success": False, "error": str(e)}
+
+                # Emitir evento de error de comando
+                emit_event("plc.command_error", {
+                    "plc_id": target_id,
+                    "command": command,
+                    "error": str(e)
+                }, "gateway_core")
+
+                # Registrar evento en la base de datos
+                self.database_manager.add_event(
+                    event_type="plc.command_error",
+                    source="gateway_core",
+                    data={
+                        "plc_id": target_id,
+                        "command": command,
+                        "error": str(e)
+                    }
+                )
+
+        return {
+            "success": True,
+            "results": results
+        }
+
+    def move_to_position(self, position: int, plc_id: Optional[str] = None) -> Dict[str, Any]:
+        """Mueve uno o todos los PLCs a una posición específica"""
+        return self.send_command("MOVE", position, plc_id)
+
+    def _handle_wms_command(self, command_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Maneja comandos recibidos desde el WMS a través del túnel reverso"""
         try:
-            plc = self.plcs[plc_id]
-            status = plc.get_status()
+            command = command_data.get("command")
+            argument = command_data.get("argument")
+            plc_id = command_data.get("plc_id")
 
-            # Emitir evento de consulta de estado
-            emit_event("plc.status_queried", {
+            self.logger.info(
+                f"Comando recibido desde WMS: {command} ({argument}) para PLC {plc_id}")
+
+            # Registrar evento en la base de datos
+            self.database_manager.add_event(
+                event_type="wms.command_received",
+                source="gateway_core",
+                data=command_data
+            )
+
+            # Ejecutar comando
+            result = self.send_command(command or "", argument, plc_id)
+
+            # Emitir evento de comando WMS procesado
+            emit_event("wms.command_processed", {
+                "command": command,
+                "argument": argument,
                 "plc_id": plc_id,
-                "connected": plc.is_connected(),
-                "status": status
+                "result": result
             }, "gateway_core")
 
-            return {
-                "plc_id": plc_id,
-                "connected": plc.is_connected(),
-                "status": status,
-                "success": True
-            }
+            # Registrar evento en la base de datos
+            self.database_manager.add_event(
+                event_type="wms.command_processed",
+                source="gateway_core",
+                data={
+                    "command": command,
+                    "argument": argument,
+                    "plc_id": plc_id,
+                    "result": result
+                }
+            )
+
+            return result
         except Exception as e:
-            self.logger.error(f"Error obteniendo estado de PLC {plc_id}: {e}")
-            emit_event("plc.status_error", {
-                "plc_id": plc_id,
-                "error": str(e)
-            }, "gateway_core")
-            return {"error": str(e), "success": False}
+            error_msg = f"Error procesando comando WMS: {e}"
+            self.logger.error(error_msg)
 
-    def send_plc_command(self, plc_id: str, command: int, argument: Optional[int] = None) -> Dict[str, Any]:
-        """Envía un comando a un PLC específico"""
-        if plc_id not in self.plcs:
-            error_msg = f"PLC {plc_id} no encontrado"
-            emit_event("plc.not_found", {
-                "plc_id": plc_id,
-                "error": error_msg
-            }, "gateway_core")
-            return {"error": error_msg, "success": False}
-
-        start_time = time.time()
-        try:
-            plc = self.plcs[plc_id]
-            if not plc.is_connected():
-                if not plc.connect():
-                    error_msg = "No se pudo conectar al PLC"
-                    emit_event("plc.connection_failed", {
-                        "plc_id": plc_id,
-                        "error": error_msg
-                    }, "gateway_core")
-                    return {"error": error_msg, "success": False}
-
-            result = plc.send_command(command, argument)
-
-            # Registrar métricas
-            duration = time.time() - start_time
-            self.metrics_collector.record_command(plc_id, command, duration)
-
-            # Si es un comando de movimiento, registrar el cambio de posición
-            if command == 1 and argument is not None:  # MUEVETE
-                self.metrics_collector.record_position_change(plc_id, argument)
-
-            # Emitir evento de comando enviado
-            emit_event("plc.command_sent", {
-                "plc_id": plc_id,
-                "command": command,
-                "argument": argument,
-                "result": result,
-                "duration": duration
+            # Emitir evento de error de comando WMS
+            emit_event("wms.command_error", {
+                "error": str(e),
+                "command_data": command_data
             }, "gateway_core")
 
-            return {
-                "plc_id": plc_id,
-                "command": command,
-                "argument": argument,
-                "result": result,
-                "success": result.get("success", False)
-            }
-        except Exception as e:
-            self.logger.error(f"Error enviando comando a PLC {plc_id}: {e}")
-            emit_event("plc.command_error", {
-                "plc_id": plc_id,
-                "command": command,
-                "argument": argument,
-                "error": str(e)
-            }, "gateway_core")
-            return {"error": str(e), "success": False}
+            # Registrar evento en la base de datos
+            self.database_manager.add_event(
+                event_type="wms.command_error",
+                source="gateway_core",
+                data={
+                    "error": str(e),
+                    "command_data": command_data
+                }
+            )
+
+            return {"success": False, "error": str(e)}

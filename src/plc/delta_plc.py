@@ -5,124 +5,105 @@ Implementación específica para PLC Delta AS Series
 """
 
 import socket
-import struct
 import time
-import logging
-import random
+import struct
 from typing import Dict, Any, Optional
-
-# Corregir la importación
 from interfaces.plc_interface import PLCInterface
 
 
 class DeltaPLC(PLCInterface):
-    """Implementación para PLC Delta AS Series"""
+    """Implementación específica para PLC Delta AS Series"""
 
     def __init__(self, ip: str, port: int = 3200):
+        """Inicializa la conexión con el PLC
+
+        Args:
+            ip: Dirección IP del PLC
+            port: Puerto del PLC (por defecto 3200)
+        """
         self.ip = ip
         self.port = port
-        self.sock = None
-        self.timeout = 5.0
-        self.logger = logging.getLogger(__name__)
-        self.max_retries = 3
-        self.base_backoff = 0.5
+        self.socket: Optional[socket.socket] = None
+        self.connected = False
 
     def connect(self) -> bool:
-        """Establece conexión TCP/IP con el PLC Delta"""
-        if self.sock:
-            return True
+        """Establece conexión con el PLC"""
+        try:
+            if self.socket:
+                self.socket.close()
 
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.sock.settimeout(self.timeout)
-                self.sock.connect((self.ip, self.port))
-                self.logger.info(
-                    f"Conexión establecida con PLC Delta en {self.ip}:{self.port}")
-                return True
-            except (socket.timeout, ConnectionRefusedError, OSError) as e:
-                self.logger.warning(
-                    f"Intento {attempt}: Error de conexión con PLC Delta: {str(e)}")
-                self.disconnect()
-                if attempt < self.max_retries:
-                    backoff = self.base_backoff * \
-                        (2 ** (attempt - 1)) + random.uniform(0, 0.2)
-                    time.sleep(backoff)
-        self.logger.error(
-            f"No se pudo conectar al PLC Delta tras {self.max_retries} intentos.")
-        return False
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.settimeout(5)  # 5 segundos de timeout
+            self.socket.connect((self.ip, self.port))
+            self.connected = True
+            return True
+        except Exception as e:
+            print(f"Error conectando a PLC {self.ip}:{self.port} - {e}")
+            self.connected = False
+            return False
 
     def disconnect(self) -> None:
-        """Cierra la conexión con el PLC Delta"""
-        if self.sock:
+        """Cierra la conexión con el PLC"""
+        if self.socket:
             try:
-                self.sock.shutdown(socket.SHUT_RDWR)
-                self.sock.close()
-            except OSError:
+                self.socket.close()
+            except:
                 pass
-            finally:
-                self.sock = None
+            self.socket = None
+            self.connected = False
 
     def is_connected(self) -> bool:
-        """Verifica si el PLC Delta está conectado"""
-        return self.sock is not None
+        """Verifica si hay conexión con el PLC"""
+        return self.connected
 
     def send_command(self, command: int, argument: Optional[int] = None) -> Dict[str, Any]:
-        """Envía un comando al PLC Delta"""
-        if not self.sock:
-            return {'error': 'No hay conexión activa con el PLC', 'success': False}
+        """Envía un comando al PLC y devuelve la respuesta
 
-        # Validar comando
-        if not isinstance(command, int) or not (0 <= command <= 255):
-            return {'error': 'Comando debe ser un entero entre 0 y 255', 'success': False}
+        Args:
+            command: Código del comando (0=ESTADO, 1=MUEVETE)
+            argument: Argumento opcional del comando (posición para MUEVETE)
 
-        if argument is not None and (not isinstance(argument, int) or not (0 <= argument <= 255)):
-            return {'error': 'Argumento debe ser un entero entre 0 y 255', 'success': False}
+        Returns:
+            Diccionario con la respuesta del PLC
+        """
+        if not self.connected or self.socket is None:
+            return {"success": False, "error": "PLC no conectado"}
 
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                data = struct.pack('B', command)
-                if argument is not None:
-                    data += struct.pack('B', argument)
-                self.sock.sendall(data)
+        try:
+            start_time = time.time()
 
-                # Recibir respuesta
-                response_data = self.sock.recv(2)
-                if len(response_data) < 2:
-                    return {'error': 'Respuesta incompleta del PLC', 'success': False}
-                status, position = struct.unpack('BB', response_data)
+            # Formato del mensaje:
+            # 2 bytes: comando
+            # 2 bytes: argumento (si aplica)
+            if argument is not None:
+                message = struct.pack('>HH', command, argument)
+            else:
+                message = struct.pack('>H', command)
 
-                return {
-                    'status_code': status,
-                    'position': position,
-                    'success': True
-                }
-            except (socket.timeout, BrokenPipeError, OSError) as e:
-                self.logger.warning(
-                    f"Intento {attempt}: Error enviando datos al PLC: {str(e)}")
-                self.disconnect()
-                if attempt < self.max_retries:
-                    if self.connect():
-                        backoff = self.base_backoff * \
-                            (2 ** (attempt - 1)) + random.uniform(0, 0.2)
-                        time.sleep(backoff)
-                        continue
-                return {'error': f"Error enviando datos: {str(e)}", 'success': False}
+            # Enviar comando
+            self.socket.send(message)
 
-        return {'error': 'Máximo número de reintentos alcanzado', 'success': False}
+            # Recibir respuesta (8 bytes: 2 de estado + 2 de posición + 4 de tiempo)
+            response = self.socket.recv(8)
+            status, position, timestamp = struct.unpack('>HHI', response)
+
+            end_time = time.time()
+            response_time = end_time - start_time
+
+            return {
+                "success": True,
+                "status_code": status,
+                "position": position,
+                "timestamp": timestamp,
+                "response_time": response_time
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def get_status(self) -> Dict[str, Any]:
-        """Obtiene el estado actual del PLC Delta"""
-        try:
-            if not self.sock:
-                if not self.connect():
-                    return {'error': 'No se pudo conectar al PLC', 'success': False}
-            return self.send_command(0)  # Comando STATUS
-        except Exception as e:
-            self.logger.error(f"Error obteniendo estado: {str(e)}")
-            return {'error': str(e), 'success': False}
+        """Obtiene el estado actual del PLC"""
+        return self.send_command(0)  # Comando 0 = ESTADO
 
-    def get_position(self) -> int:
-        """Obtiene la posición actual del carrusel"""
-        status = self.get_status()
-        return status.get('position', -1)
+    def move_to_position(self, position: int) -> Dict[str, Any]:
+        """Mueve el carrusel a una posición específica"""
+        return self.send_command(1, position)  # Comando 1 = MUEVETE

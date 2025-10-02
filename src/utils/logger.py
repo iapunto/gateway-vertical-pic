@@ -83,3 +83,16 @@ def setup_logger(config: Optional[Dict[str, Any]] = None) -> logging.Logger:
     """Función de conveniencia para configurar el logger"""
     gateway_logger = GatewayLogger(config)
     return gateway_logger.get_logger()
+
+
+def log_event(logger: logging.Logger, event_type: str, message: str, **kwargs) -> None:
+    """Función para registrar eventos estructurados en los logs"""
+    # Crear mensaje de log con información adicional
+    if kwargs:
+        extra_info = " | ".join([f"{k}={v}" for k, v in kwargs.items()])
+        log_message = f"{message} [{extra_info}]"
+    else:
+        log_message = message
+
+    # Registrar el evento en el log
+    logger.info(f"EVENT:{event_type} - {log_message}")

@@ -1,41 +1,44 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Fábrica para crear instancias de PLCs según el tipo
+Fábrica para crear instancias de PLCs
 """
 
-from typing import Dict, Any
-
-# Corregir las importaciones
+from typing import Dict, Type
 from interfaces.plc_interface import PLCInterface
 from plc.delta_plc import DeltaPLC
+
+# Registro de tipos de PLCs disponibles
+PLC_TYPES: Dict[str, Type[PLCInterface]] = {
+    "delta": DeltaPLC,
+    # Se pueden añadir más tipos de PLCs aquí
+}
 
 
 class PLCFactory:
     """Fábrica para crear instancias de PLCs"""
 
-    # Mapeo de tipos de PLC a sus implementaciones
-    PLC_TYPES = {
-        'delta': DeltaPLC,
-        'Delta': DeltaPLC,
-        'DELTA': DeltaPLC
-    }
+    @staticmethod
+    def create_plc(plc_type: str, ip: str, port: int = 3200) -> PLCInterface:
+        """Crea una instancia de PLC del tipo especificado
 
-    @classmethod
-    def create_plc(cls, plc_type: str, ip: str, port: int = 3200) -> PLCInterface:
-        """Crea una instancia de PLC según el tipo especificado"""
-        plc_class = cls.PLC_TYPES.get(plc_type)
-        if not plc_class:
+        Args:
+            plc_type: Tipo de PLC a crear
+            ip: Dirección IP del PLC
+            port: Puerto del PLC
+
+        Returns:
+            Instancia del PLC especificado
+
+        Raises:
+            ValueError: Si el tipo de PLC no está soportado
+        """
+        # Convertir a minúsculas para hacerlo case-insensitive
+        plc_type_lower = plc_type.lower()
+
+        if plc_type_lower not in PLC_TYPES:
             raise ValueError(f"Tipo de PLC no soportado: {plc_type}")
 
-        return plc_class(ip, port)
-
-    @classmethod
-    def register_plc_type(cls, plc_type: str, plc_class):
-        """Registra un nuevo tipo de PLC"""
-        cls.PLC_TYPES[plc_type] = plc_class
-
-    @classmethod
-    def get_supported_types(cls) -> list:
-        """Retorna los tipos de PLC soportados"""
-        return list(cls.PLC_TYPES.keys())
+        # Crear instancia usando type.__call__
+        plc_class = PLC_TYPES[plc_type_lower]
+        return plc_class.__call__(ip, port)
